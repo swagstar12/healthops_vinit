@@ -1,0 +1,66 @@
+version: "3.9"
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/healthops
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: pranavbhange12
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_FLYWAY_URL: jdbc:postgresql://db:5432/healthops
+      SPRING_FLYWAY_USER: postgres
+      SPRING_FLYWAY_PASSWORD: pranavbhange12
+    networks:
+      - healthops-network
+
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY}   # ← paste your key
+      JAVA_BACKEND_URL: http://backend:8080
+    depends_on:
+      - backend
+    networks:
+      - healthops-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+      - chatbot
+    networks:
+      - healthops-network
+
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: healthops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pranavbhange12
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - healthops-network
+
+volumes:
+  db_data:
+
+networks:
+  healthops-network:
+    driver: bridge

@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://db:5432/healthops
+    username: postgres
+    password: pranavbhange12
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    locations: classpath:db/migration
+    enabled: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    com.healthops: DEBUG
+    root: INFO
+
+jwt:
+  secret: tZ0U+NLf/LKsQMg1IdRNAgoU45xV2b3cz/MJNvq6PAg=
+  expirationMs: 86400000

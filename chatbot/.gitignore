@@ -1,0 +1,4 @@
+# Create .gitignore inside chatbot folder
+echo ".env" > chatbot\.gitignore
+echo "__pycache__/" >> chatbot\.gitignore
+echo "*.pyc" >> chatbot\.gitignore
