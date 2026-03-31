@@ -24,132 +24,181 @@ import java.util.Map;
 @RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
-  private final UserService userService;
-  private final DoctorRepository doctorRepo;
-  private final UserRepository userRepo;
-  private final VisitRepository visitRepo;
-  private final AppointmentRepository appointmentRepo;
-  private final PatientRepository patientRepo;
 
-  public AdminController(UserService userService, DoctorRepository doctorRepo, 
-                        UserRepository userRepo, VisitRepository visitRepo,
-                        AppointmentRepository appointmentRepo, PatientRepository patientRepo) {
-    this.userService = userService; 
-    this.doctorRepo = doctorRepo; 
-    this.userRepo = userRepo;
-    this.visitRepo = visitRepo;
-    this.appointmentRepo = appointmentRepo;
-    this.patientRepo = patientRepo;
-  }
+    private final UserService userService;
+    private final DoctorRepository doctorRepo;
+    private final UserRepository userRepo;
+    private final VisitRepository visitRepo;
+    private final AppointmentRepository appointmentRepo;
+    private final PatientRepository patientRepo;
 
-  // Doctor Management
-  @PostMapping("/doctors")
-  public Doctor createDoctor(@RequestBody CreateDoctorRequest req) {
-    var u = userService.register(req.email(), req.fullName(), req.password(), Role.DOCTOR);
-    Doctor d = Doctor.builder().user(u).specialization(req.specialization()).phone(req.phone()).build();
-    return doctorRepo.save(d);
-  }
-
-  @GetMapping("/doctors")
-  public List<Doctor> listDoctors() { 
-    return doctorRepo.findAll(); 
-  }
-
-  @GetMapping("/doctors/{id}")
-  public ResponseEntity<Doctor> getDoctor(@PathVariable Long id) {
-    return doctorRepo.findById(id)
-        .map(ResponseEntity::ok)
-        .orElse(ResponseEntity.notFound().build());
-  }
-
-  @PutMapping("/doctors/{id}")
-  public ResponseEntity<Doctor> updateDoctor(@PathVariable Long id, @RequestBody UpdateDoctorRequest req) {
-    return doctorRepo.findById(id).map(doctor -> {
-      doctor.setSpecialization(req.specialization());
-      doctor.setPhone(req.phone());
-      if (doctor.getUser() != null) {
-        doctor.getUser().setFullName(req.fullName());
-        doctor.getUser().setEmail(req.email());
-      }
-      return ResponseEntity.ok(doctorRepo.save(doctor));
-    }).orElse(ResponseEntity.notFound().build());
-  }
-
-  @DeleteMapping("/doctors/{id}")
-  public ResponseEntity<?> deleteDoctor(@PathVariable Long id) {
-    if (doctorRepo.existsById(id)) {
-      doctorRepo.deleteById(id);
-      return ResponseEntity.ok().build();
+    public AdminController(UserService userService, DoctorRepository doctorRepo,
+                           UserRepository userRepo, VisitRepository visitRepo,
+                           AppointmentRepository appointmentRepo, PatientRepository patientRepo) {
+        this.userService = userService;
+        this.doctorRepo = doctorRepo;
+        this.userRepo = userRepo;
+        this.visitRepo = visitRepo;
+        this.appointmentRepo = appointmentRepo;
+        this.patientRepo = patientRepo;
     }
-    return ResponseEntity.notFound().build();
-  }
 
-  // Receptionist Management
-  @PostMapping("/receptionists")
-  public User createReceptionist(@RequestBody CreateUserRequest req) {
-    return userService.register(req.email(), req.fullName(), req.password(), Role.RECEPTIONIST);
-  }
+    // ─── Doctor Management ────────────────────────────────────────────────────
 
-  @GetMapping("/receptionists")
-  public List<User> listReceptionists() {
-    return userRepo.findByRolesName("RECEPTIONIST");
-  }
+    @PostMapping("/doctors")
+    public ResponseEntity<?> createDoctor(@RequestBody CreateDoctorRequest req) {
+        // Check for duplicate email
+        if (userRepo.findByEmail(req.email()).isPresent()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "A user with email '" + req.email() + "' already exists"));
+        }
+        var u = userService.register(req.email(), req.fullName(), req.password(), Role.DOCTOR);
+        Doctor d = Doctor.builder()
+                .user(u)
+                .specialization(req.specialization())
+                .phone(req.phone())
+                .build();
+        return ResponseEntity.ok(doctorRepo.save(d));
+    }
 
-  @GetMapping("/receptionists/{id}")
-  public ResponseEntity<User> getReceptionist(@PathVariable Long id) {
-    return userRepo.findById(id)
-        .filter(user -> user.getRoles().stream().anyMatch(role -> "RECEPTIONIST".equals(role.getName())))
-        .map(ResponseEntity::ok)
-        .orElse(ResponseEntity.notFound().build());
-  }
+    @GetMapping("/doctors")
+    public List<Doctor> listDoctors() {
+        return doctorRepo.findAll();
+    }
 
-  @PutMapping("/receptionists/{id}")
-  public ResponseEntity<User> updateReceptionist(@PathVariable Long id, @RequestBody UpdateUserRequest req) {
-    return userRepo.findById(id)
-        .filter(user -> user.getRoles().stream().anyMatch(role -> "RECEPTIONIST".equals(role.getName())))
-        .map(user -> {
-          user.setFullName(req.fullName());
-          user.setEmail(req.email());
-          user.setEnabled(req.enabled());
-          return ResponseEntity.ok(userRepo.save(user));
+    @GetMapping("/doctors/{id}")
+    public ResponseEntity<Doctor> getDoctor(@PathVariable Long id) {
+        return doctorRepo.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/doctors/{id}")
+    public ResponseEntity<?> updateDoctor(@PathVariable Long id, @RequestBody UpdateDoctorRequest req) {
+        return doctorRepo.findById(id).map(doctor -> {
+            // Check email conflict (only if email is changing)
+            String newEmail = req.email();
+            if (newEmail != null && doctor.getUser() != null
+                    && !newEmail.equals(doctor.getUser().getEmail())) {
+                var existing = userRepo.findByEmail(newEmail);
+                if (existing.isPresent() && !existing.get().getId().equals(doctor.getUser().getId())) {
+                    return ResponseEntity.badRequest()
+                            .<Object>body(Map.of("message", "Email '" + newEmail + "' is already in use"));
+                }
+            }
+            if (req.specialization() != null) doctor.setSpecialization(req.specialization());
+            if (req.phone() != null) doctor.setPhone(req.phone());
+            if (doctor.getUser() != null) {
+                if (req.fullName() != null) doctor.getUser().setFullName(req.fullName());
+                if (newEmail != null) doctor.getUser().setEmail(newEmail);
+                userRepo.save(doctor.getUser());
+            }
+            return ResponseEntity.ok(doctorRepo.save(doctor));
         }).orElse(ResponseEntity.notFound().build());
-  }
-
-  @DeleteMapping("/receptionists/{id}")
-  public ResponseEntity<?> deleteReceptionist(@PathVariable Long id) {
-    if (userRepo.existsById(id)) {
-      userRepo.deleteById(id);
-      return ResponseEntity.ok().build();
     }
-    return ResponseEntity.notFound().build();
-  }
 
-  // Dashboard Statistics
-  @GetMapping("/dashboard/stats")
-  public Map<String, Object> getDashboardStats() {
-    return Map.of(
-        "totalDoctors", doctorRepo.count(),
-        "totalReceptionists", userRepo.countByRolesName("RECEPTIONIST"),
-        "totalPatients", patientRepo.count(),
-        "totalAppointments", appointmentRepo.count(),
-        "totalVisits", visitRepo.count(),
-        "todayAppointments", appointmentRepo.countTodayAppointments(),
-        "pendingAppointments", appointmentRepo.countByStatus("SCHEDULED"),
-        "completedAppointments", appointmentRepo.countByStatus("COMPLETED")
-    );
-  }
+    @DeleteMapping("/doctors/{id}")
+    public ResponseEntity<?> deleteDoctor(@PathVariable Long id) {
+        if (!doctorRepo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        doctorRepo.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Doctor deleted successfully"));
+    }
 
-  // User Management (All users)
-  @GetMapping("/users")
-  public List<User> getAllUsers() {
-    return userRepo.findAll();
-  }
+    // ─── Receptionist Management ──────────────────────────────────────────────
 
-  @PutMapping("/users/{id}/toggle-status")
-  public ResponseEntity<User> toggleUserStatus(@PathVariable Long id) {
-    return userRepo.findById(id).map(user -> {
-      user.setEnabled(!user.isEnabled());
-      return ResponseEntity.ok(userRepo.save(user));
-    }).orElse(ResponseEntity.notFound().build());
-  }
+    @PostMapping("/receptionists")
+    public ResponseEntity<?> createReceptionist(@RequestBody CreateUserRequest req) {
+        if (userRepo.findByEmail(req.email()).isPresent()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "A user with email '" + req.email() + "' already exists"));
+        }
+        var u = userService.register(req.email(), req.fullName(), req.password(), Role.RECEPTIONIST);
+        return ResponseEntity.ok(u);
+    }
+
+    @GetMapping("/receptionists")
+    public List<User> listReceptionists() {
+        return userRepo.findByRolesName("RECEPTIONIST");
+    }
+
+    @GetMapping("/receptionists/{id}")
+    public ResponseEntity<User> getReceptionist(@PathVariable Long id) {
+        return userRepo.findById(id)
+                .filter(u -> u.getRoles().stream().anyMatch(r -> "RECEPTIONIST".equals(r.getName())))
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/receptionists/{id}")
+    public ResponseEntity<?> updateReceptionist(@PathVariable Long id,
+                                                @RequestBody UpdateUserRequest req) {
+        return userRepo.findById(id)
+                .filter(u -> u.getRoles().stream().anyMatch(r -> "RECEPTIONIST".equals(r.getName())))
+                .map(user -> {
+                    // Check email conflict
+                    if (req.email() != null && !req.email().equals(user.getEmail())) {
+                        var existing = userRepo.findByEmail(req.email());
+                        if (existing.isPresent() && !existing.get().getId().equals(user.getId())) {
+                            return ResponseEntity.badRequest()
+                                    .<Object>body(Map.of("message",
+                                            "Email '" + req.email() + "' is already in use"));
+                        }
+                    }
+                    if (req.fullName() != null) user.setFullName(req.fullName());
+                    if (req.email() != null) user.setEmail(req.email());
+                    user.setEnabled(req.enabled());
+                    return ResponseEntity.ok(userRepo.save(user));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/receptionists/{id}")
+    public ResponseEntity<?> deleteReceptionist(@PathVariable Long id) {
+        if (!userRepo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        userRepo.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Receptionist deleted successfully"));
+    }
+
+    // ─── User status toggle ───────────────────────────────────────────────────
+
+    @PutMapping("/users/{id}/toggle-status")
+    public ResponseEntity<?> toggleUserStatus(@PathVariable Long id) {
+        return userRepo.findById(id).map(user -> {
+            user.setEnabled(!user.isEnabled());
+            userRepo.save(user);
+            return ResponseEntity.ok(Map.of(
+                    "id", user.getId(),
+                    "enabled", user.isEnabled(),
+                    "message", user.getFullName() + " has been "
+                            + (user.isEnabled() ? "enabled" : "disabled")
+            ));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ─── Dashboard stats ──────────────────────────────────────────────────────
+
+    @GetMapping("/dashboard/stats")
+    public Map<String, Object> getDashboardStats() {
+        return Map.of(
+                "totalDoctors", doctorRepo.count(),
+                "totalReceptionists", userRepo.countByRolesName("RECEPTIONIST"),
+                "totalPatients", patientRepo.count(),
+                "totalAppointments", appointmentRepo.count(),
+                "totalVisits", visitRepo.count(),
+                "todayAppointments", appointmentRepo.countTodayAppointments(),
+                "pendingAppointments", appointmentRepo.countByStatus("SCHEDULED"),
+                "completedAppointments", appointmentRepo.countByStatus("COMPLETED")
+        );
+    }
+
+    // ─── All users ────────────────────────────────────────────────────────────
+
+    @GetMapping("/users")
+    public List<User> getAllUsers() {
+        return userRepo.findAll();
+    }
 }
