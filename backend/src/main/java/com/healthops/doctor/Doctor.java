@@ -1,5 +1,6 @@
 package com.healthops.doctor;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.healthops.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -12,6 +13,7 @@ public class Doctor {
 
   @OneToOne
   @JoinColumn(name="user_id", unique=true)
+  @JsonIgnoreProperties({"password", "createdAt", "roles"})
   private User user;
 
   private String specialization;

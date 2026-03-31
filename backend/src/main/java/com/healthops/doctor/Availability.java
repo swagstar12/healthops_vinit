@@ -1,5 +1,6 @@
 package com.healthops.doctor;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,11 +11,10 @@ public class Availability {
   private Long id;
 
   @ManyToOne @JoinColumn(name="doctor_id")
+  @JsonIgnoreProperties({"user", "specialization", "phone"})
   private Doctor doctor;
 
-  // 1 = Monday ... 7 = Sunday
   private int dayOfWeek;
-
   private java.time.LocalTime startTime;
   private java.time.LocalTime endTime;
 }

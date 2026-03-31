@@ -1,5 +1,6 @@
 package com.healthops.appointment;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.healthops.doctor.Doctor;
 import com.healthops.patient.Patient;
 import com.healthops.user.User;
@@ -15,17 +16,20 @@ public class Appointment {
   private Long id;
 
   @ManyToOne @JoinColumn(name="patient_id")
+  @JsonIgnoreProperties({"dob", "address"})
   private Patient patient;
 
   @ManyToOne @JoinColumn(name="doctor_id")
+  @JsonIgnoreProperties({"user", "specialization", "phone"})
   private Doctor doctor;
 
   private Instant scheduledAt;
-  private String status; // SCHEDULED, COMPLETED, CANCELLED
+  private String status;
   @Lob
   @Column(columnDefinition = "text")
   private String reason;
 
   @ManyToOne @JoinColumn(name="created_by")
+  @JsonIgnoreProperties({"password", "createdAt", "roles", "enabled"})
   private User createdBy;
 }

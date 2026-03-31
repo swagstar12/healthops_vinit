@@ -47,7 +47,6 @@ public class AdminController {
 
     @PostMapping("/doctors")
     public ResponseEntity<?> createDoctor(@RequestBody CreateDoctorRequest req) {
-        // Check for duplicate email
         if (userRepo.findByEmail(req.email()).isPresent()) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "A user with email '" + req.email() + "' already exists"));
@@ -67,16 +66,16 @@ public class AdminController {
     }
 
     @GetMapping("/doctors/{id}")
-    public ResponseEntity<Doctor> getDoctor(@PathVariable Long id) {
+    public ResponseEntity<Doctor> getDoctor(@PathVariable("id") Long id) {
         return doctorRepo.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/doctors/{id}")
-    public ResponseEntity<?> updateDoctor(@PathVariable Long id, @RequestBody UpdateDoctorRequest req) {
+    public ResponseEntity<?> updateDoctor(@PathVariable("id") Long id,
+                                          @RequestBody UpdateDoctorRequest req) {
         return doctorRepo.findById(id).map(doctor -> {
-            // Check email conflict (only if email is changing)
             String newEmail = req.email();
             if (newEmail != null && doctor.getUser() != null
                     && !newEmail.equals(doctor.getUser().getEmail())) {
@@ -98,7 +97,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/doctors/{id}")
-    public ResponseEntity<?> deleteDoctor(@PathVariable Long id) {
+    public ResponseEntity<?> deleteDoctor(@PathVariable("id") Long id) {
         if (!doctorRepo.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
@@ -124,7 +123,7 @@ public class AdminController {
     }
 
     @GetMapping("/receptionists/{id}")
-    public ResponseEntity<User> getReceptionist(@PathVariable Long id) {
+    public ResponseEntity<User> getReceptionist(@PathVariable("id") Long id) {
         return userRepo.findById(id)
                 .filter(u -> u.getRoles().stream().anyMatch(r -> "RECEPTIONIST".equals(r.getName())))
                 .map(ResponseEntity::ok)
@@ -132,12 +131,11 @@ public class AdminController {
     }
 
     @PutMapping("/receptionists/{id}")
-    public ResponseEntity<?> updateReceptionist(@PathVariable Long id,
+    public ResponseEntity<?> updateReceptionist(@PathVariable("id") Long id,
                                                 @RequestBody UpdateUserRequest req) {
         return userRepo.findById(id)
                 .filter(u -> u.getRoles().stream().anyMatch(r -> "RECEPTIONIST".equals(r.getName())))
                 .map(user -> {
-                    // Check email conflict
                     if (req.email() != null && !req.email().equals(user.getEmail())) {
                         var existing = userRepo.findByEmail(req.email());
                         if (existing.isPresent() && !existing.get().getId().equals(user.getId())) {
@@ -148,14 +146,14 @@ public class AdminController {
                     }
                     if (req.fullName() != null) user.setFullName(req.fullName());
                     if (req.email() != null) user.setEmail(req.email());
-                    user.setEnabled(req.enabled());
+                    user.setEnabled(req.enabledOrDefault());
                     return ResponseEntity.ok(userRepo.save(user));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/receptionists/{id}")
-    public ResponseEntity<?> deleteReceptionist(@PathVariable Long id) {
+    public ResponseEntity<?> deleteReceptionist(@PathVariable("id") Long id) {
         if (!userRepo.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
@@ -166,7 +164,7 @@ public class AdminController {
     // ─── User status toggle ───────────────────────────────────────────────────
 
     @PutMapping("/users/{id}/toggle-status")
-    public ResponseEntity<?> toggleUserStatus(@PathVariable Long id) {
+    public ResponseEntity<?> toggleUserStatus(@PathVariable("id") Long id) {
         return userRepo.findById(id).map(user -> {
             user.setEnabled(!user.isEnabled());
             userRepo.save(user);
