@@ -17,7 +17,6 @@
     <jjwt.version>0.11.5</jjwt.version>
   </properties>
 
-
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -102,6 +101,16 @@
 
   <build>
     <plugins>
+      <!-- ✅ FIX: Add -parameters flag so Spring can resolve @PathVariable by name via reflection -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <arg>-parameters</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
