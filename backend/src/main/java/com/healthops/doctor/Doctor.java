@@ -5,6 +5,8 @@ import com.healthops.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Entity @Table(name="doctors")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Doctor {
@@ -18,4 +20,8 @@ public class Doctor {
 
   private String specialization;
   private String phone;
+
+  @Column(nullable = false, precision = 10, scale = 2)
+  @Builder.Default
+  private BigDecimal consultationFee = BigDecimal.valueOf(500.00);
 }

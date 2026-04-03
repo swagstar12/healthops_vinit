@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +57,7 @@ public class AdminController {
                 .user(u)
                 .specialization(req.specialization())
                 .phone(req.phone())
+                .consultationFee(req.consultationFee() != null ? req.consultationFee() : BigDecimal.valueOf(500))
                 .build();
         return ResponseEntity.ok(doctorRepo.save(d));
     }
@@ -87,6 +89,7 @@ public class AdminController {
             }
             if (req.specialization() != null) doctor.setSpecialization(req.specialization());
             if (req.phone() != null) doctor.setPhone(req.phone());
+            if (req.consultationFee() != null) doctor.setConsultationFee(req.consultationFee());
             if (doctor.getUser() != null) {
                 if (req.fullName() != null) doctor.getUser().setFullName(req.fullName());
                 if (newEmail != null) doctor.getUser().setEmail(newEmail);

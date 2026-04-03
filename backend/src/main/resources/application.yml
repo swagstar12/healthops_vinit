@@ -27,3 +27,8 @@ logging:
 jwt:
   secret: tZ0U+NLf/LKsQMg1IdRNAgoU45xV2b3cz/MJNvq6PAg=
   expirationMs: 86400000
+
+razorpay:
+  key:
+    id: ${RAZORPAY_KEY_ID}
+    secret: ${RAZORPAY_KEY_SECRET}

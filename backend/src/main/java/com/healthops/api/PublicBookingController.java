@@ -10,9 +10,15 @@ import com.healthops.doctor.Holiday;
 import com.healthops.doctor.HolidayRepository;
 import com.healthops.patient.Patient;
 import com.healthops.patient.PatientRepository;
+import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.razorpay.Order;
+import com.razorpay.RazorpayClient;
+
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -29,6 +35,12 @@ public class PublicBookingController {
     private final HolidayRepository holidayRepo;
     private final PatientRepository patientRepo;
     private final AppointmentRepository appointmentRepo;
+
+    @Value("${razorpay.key.id}")
+    private String razorpayKeyId;
+
+    @Value("${razorpay.key.secret}")
+    private String razorpayKeySecret;
 
     public PublicBookingController(DoctorRepository doctorRepo,
                                    AvailabilityRepository availRepo,
@@ -53,6 +65,7 @@ public class PublicBookingController {
                 "name", d.getUser() != null ? d.getUser().getFullName() : "Unknown",
                 "specialization", d.getSpecialization() != null ? d.getSpecialization() : "",
                 "phone", d.getPhone() != null ? d.getPhone() : "",
+                "consultationFee", d.getConsultationFee() != null ? d.getConsultationFee() : BigDecimal.valueOf(500),
                 "availability", slots,
                 "holidays", holidays.stream()
                     .map(h -> Map.of("date", h.getDate().toString(), "reason", h.getReason() != null ? h.getReason() : ""))
@@ -61,7 +74,49 @@ public class PublicBookingController {
         }).collect(Collectors.toList());
     }
 
-    /** Book appointment as a patient — public endpoint */
+    /** Create Razorpay order for payment — public endpoint */
+    @PostMapping("/create-payment-order")
+    public ResponseEntity<?> createPaymentOrder(@RequestBody PaymentOrderRequest req) {
+        try {
+            Doctor doctor = doctorRepo.findById(req.doctorId()).orElse(null);
+            if (doctor == null) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Doctor not found"));
+            }
+
+            BigDecimal fee = doctor.getConsultationFee() != null ? doctor.getConsultationFee() : BigDecimal.valueOf(500);
+            // Razorpay amount is in paise (1 INR = 100 paise)
+            int amountInPaise = fee.multiply(BigDecimal.valueOf(100)).intValue();
+
+            RazorpayClient client = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
+
+            JSONObject orderRequest = new JSONObject();
+            orderRequest.put("amount", amountInPaise);
+            orderRequest.put("currency", "INR");
+            orderRequest.put("receipt", "receipt_" + System.currentTimeMillis());
+            orderRequest.put("notes", new JSONObject()
+                .put("doctorId", req.doctorId())
+                .put("doctorName", doctor.getUser() != null ? doctor.getUser().getFullName() : "")
+                .put("patientName", req.patientName())
+                .put("patientPhone", req.patientPhone())
+            );
+
+            Order order = client.orders.create(orderRequest);
+
+            return ResponseEntity.ok(Map.of(
+                "orderId", order.get("id"),
+                "amount", amountInPaise,
+                "currency", "INR",
+                "keyId", razorpayKeyId,
+                "doctorName", doctor.getUser() != null ? doctor.getUser().getFullName() : "",
+                "consultationFee", fee
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Payment order creation failed: " + e.getMessage()));
+        }
+    }
+
+    /** Verify Razorpay payment and book appointment — public endpoint */
     @PostMapping("/book-appointment")
     public ResponseEntity<?> bookAppointment(@RequestBody BookingRequest req) {
         // Validate required fields
@@ -101,7 +156,6 @@ public class PublicBookingController {
             .filter(p -> req.patientPhone().equals(p.getPhone()))
             .findFirst()
             .orElseGet(() -> {
-                // Auto-generate patient code
                 long count = patientRepo.count() + 1000;
                 Patient np = Patient.builder()
                     .code(String.valueOf(count))
@@ -120,21 +174,37 @@ public class PublicBookingController {
             .build();
 
         Appointment saved = appointmentRepo.save(appt);
+        BigDecimal fee = doctor.getConsultationFee() != null ? doctor.getConsultationFee() : BigDecimal.valueOf(500);
 
-        return ResponseEntity.ok(Map.of(
-            "message", "Appointment booked successfully!",
-            "appointmentId", saved.getId(),
-            "patientCode", patient.getCode(),
-            "doctorName", "Dr. " + doctor.getUser().getFullName(),
-            "scheduledAt", saved.getScheduledAt().toString()
+        return ResponseEntity.ok(Map.ofEntries(
+            Map.entry("message", "Appointment booked successfully!"),
+            Map.entry("appointmentId", saved.getId()),
+            Map.entry("patientCode", patient.getCode()),
+            Map.entry("patientName", patient.getFullName()),
+            Map.entry("patientPhone", patient.getPhone() != null ? patient.getPhone() : ""),
+            Map.entry("doctorName", "Dr. " + doctor.getUser().getFullName()),
+            Map.entry("specialization", doctor.getSpecialization() != null ? doctor.getSpecialization() : ""),
+            Map.entry("scheduledAt", saved.getScheduledAt().toString()),
+            Map.entry("consultationFee", fee),
+            Map.entry("razorpayPaymentId", req.razorpayPaymentId() != null ? req.razorpayPaymentId() : ""),
+            Map.entry("razorpayOrderId", req.razorpayOrderId() != null ? req.razorpayOrderId() : "")
         ));
     }
+
+    public record PaymentOrderRequest(
+        Long doctorId,
+        String patientName,
+        String patientPhone
+    ) {}
 
     public record BookingRequest(
         String patientName,
         String patientPhone,
         Long doctorId,
         Instant scheduledAt,
-        String reason
+        String reason,
+        String razorpayPaymentId,
+        String razorpayOrderId,
+        String razorpaySignature
     ) {}
 }

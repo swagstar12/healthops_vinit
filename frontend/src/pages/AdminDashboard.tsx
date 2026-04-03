@@ -8,6 +8,7 @@ type Doctor = {
   user: { id: number; email: string; fullName: string; enabled: boolean }
   specialization?: string
   phone?: string
+  consultationFee?: number
 }
 
 type Receptionist = {
@@ -32,7 +33,6 @@ type Toast = { id: number; message: string; type: 'success' | 'error' | 'info' }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Extracts a readable message from an Axios error response */
 function extractError(err: unknown): string {
   if (err && typeof err === 'object' && 'response' in err) {
     const res = (err as any).response
@@ -146,12 +146,11 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Per-row action loading: key = "deleteDoc_3", "toggleRec_7", etc.
   const [busy, setBusy] = useState<Record<string, boolean>>({})
 
-  // Doctor form
+  // Doctor form — added consultationFee
   const [doctorForm, setDoctorForm] = useState(
-    { email: '', fullName: '', password: '', specialization: '', phone: '' }
+    { email: '', fullName: '', password: '', specialization: '', phone: '', consultationFee: '' }
   )
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null)
   const doctorFormRef = useRef<HTMLDivElement>(null)
@@ -185,12 +184,8 @@ export default function AdminDashboard() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }
 
-  // ─── Busy helpers ───────────────────────────────────────────────────────────
-
   function startBusy(key: string) { setBusy(b => ({ ...b, [key]: true })) }
   function stopBusy(key: string)  { setBusy(b => { const n = { ...b }; delete n[key]; return n }) }
-
-  // ─── Data loading ───────────────────────────────────────────────────────────
 
   useEffect(() => { loadAll() }, [])
 
@@ -211,8 +206,6 @@ export default function AdminDashboard() {
       setLoading(false)
     }
   }
-
-  // ─── Dialog helper ──────────────────────────────────────────────────────────
 
   function openConfirm(opts: {
     title: string; message: string; confirmLabel?: string
@@ -243,20 +236,22 @@ export default function AdminDashboard() {
     startBusy(key)
     try {
       if (editingDoctor) {
-        // PUT /api/admin/doctors/{id} — password NOT sent on edit
         await api.put(`/admin/doctors/${editingDoctor.id}`, {
           email: doctorForm.email,
           fullName: doctorForm.fullName,
           specialization: doctorForm.specialization,
           phone: doctorForm.phone,
+          consultationFee: doctorForm.consultationFee ? Number(doctorForm.consultationFee) : null,
         })
         showToast(`Dr. ${doctorForm.fullName} updated successfully`)
         resetDoctorForm()
       } else {
-        // POST /api/admin/doctors
-        await api.post('/admin/doctors', doctorForm)
+        await api.post('/admin/doctors', {
+          ...doctorForm,
+          consultationFee: doctorForm.consultationFee ? Number(doctorForm.consultationFee) : null,
+        })
         showToast(`Dr. ${doctorForm.fullName} added`)
-        setDoctorForm({ email: '', fullName: '', password: '', specialization: '', phone: '' })
+        setDoctorForm({ email: '', fullName: '', password: '', specialization: '', phone: '', consultationFee: '' })
       }
       await loadAll()
     } catch (err) {
@@ -271,9 +266,10 @@ export default function AdminDashboard() {
     setDoctorForm({
       email: doc.user.email,
       fullName: doc.user.fullName,
-      password: '',                          // never pre-filled
+      password: '',
       specialization: doc.specialization ?? '',
       phone: doc.phone ?? '',
+      consultationFee: doc.consultationFee != null ? String(doc.consultationFee) : '',
     })
     setActiveTab('doctors')
     setTimeout(() =>
@@ -282,7 +278,7 @@ export default function AdminDashboard() {
 
   function resetDoctorForm() {
     setEditingDoctor(null)
-    setDoctorForm({ email: '', fullName: '', password: '', specialization: '', phone: '' })
+    setDoctorForm({ email: '', fullName: '', password: '', specialization: '', phone: '', consultationFee: '' })
   }
 
   function handleToggleDoctor(doc: Doctor) {
@@ -299,7 +295,6 @@ export default function AdminDashboard() {
   }
 
   async function doToggleDoctor(doc: Doctor) {
-    // Toggle endpoint uses the USER id, not the doctor entity id
     const key = `toggleDoc_${doc.id}`
     startBusy(key)
     try {
@@ -349,8 +344,6 @@ export default function AdminDashboard() {
     startBusy(key)
     try {
       if (editingRec) {
-        // PUT /api/admin/receptionists/{id}
-        // The receptionist list returns User entities, so rec.id IS the user id
         await api.put(`/admin/receptionists/${editingRec.id}`, {
           fullName: recForm.fullName,
           email: recForm.email,
@@ -359,7 +352,6 @@ export default function AdminDashboard() {
         showToast(`${recForm.fullName} updated successfully`)
         resetRecForm()
       } else {
-        // POST /api/admin/receptionists
         await api.post('/admin/receptionists', {
           email: recForm.email,
           fullName: recForm.fullName,
@@ -408,7 +400,6 @@ export default function AdminDashboard() {
   }
 
   async function doToggleRec(rec: Receptionist) {
-    // rec.id is the user id for receptionists
     const key = `toggleRec_${rec.id}`
     startBusy(key)
     try {
@@ -472,8 +463,6 @@ export default function AdminDashboard() {
     { key: 'users',         label: '👥 All Users' },
   ]
 
-  // ─── Loading screen ─────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -484,8 +473,6 @@ export default function AdminDashboard() {
       </div>
     )
   }
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -567,10 +554,17 @@ export default function AdminDashboard() {
                         <p className="text-xs text-gray-400">{d.specialization || 'General'}</p>
                       </div>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold
-                      ${d.user.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {d.user.enabled ? 'Active' : 'Inactive'}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      {d.consultationFee != null && (
+                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                          ₹{d.consultationFee}
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold
+                        ${d.user.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {d.user.enabled ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
                   </div>
                 ))}
                 {doctors.length === 0 && (
@@ -669,6 +663,30 @@ export default function AdminDashboard() {
                     value={doctorForm.phone}
                     onChange={e => setDoctorForm(f => ({ ...f, phone: e.target.value }))} required />
                 </div>
+
+                {/* ── Consultation Fee (NEW) ── */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                    Consultation Fee (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm select-none">
+                      ₹
+                    </span>
+                    <input
+                      className={`${inp} pl-7`}
+                      type="number"
+                      min="0"
+                      step="50"
+                      placeholder="e.g. 500"
+                      value={doctorForm.consultationFee}
+                      onChange={e => setDoctorForm(f => ({ ...f, consultationFee: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Per appointment charge shown to patients</p>
+                </div>
+
                 <div className="md:col-span-2 flex justify-end">
                   <button type="submit" disabled={busy.doctorForm}
                     className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700
@@ -704,6 +722,7 @@ export default function AdminDashboard() {
                         <th className="px-6 py-3 text-left font-semibold">Doctor</th>
                         <th className="px-4 py-3 text-left font-semibold">Specialization</th>
                         <th className="px-4 py-3 text-left font-semibold">Phone</th>
+                        <th className="px-4 py-3 text-left font-semibold">Fee</th>
                         <th className="px-4 py-3 text-left font-semibold">Status</th>
                         <th className="px-4 py-3 text-right font-semibold">Actions</th>
                       </tr>
@@ -728,6 +747,14 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-4 py-4 text-gray-600">{doc.specialization || '—'}</td>
                           <td className="px-4 py-4 text-gray-600">{doc.phone || '—'}</td>
+                          <td className="px-4 py-4">
+                            {doc.consultationFee != null
+                              ? <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg text-xs border border-emerald-100">
+                                  ₹{doc.consultationFee}
+                                </span>
+                              : <span className="text-gray-400 text-xs">—</span>
+                            }
+                          </td>
                           <td className="px-4 py-4">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
                               text-xs font-semibold
@@ -1004,6 +1031,11 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    {d.consultationFee != null && (
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                        ₹{d.consultationFee}
+                      </span>
+                    )}
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold
                       ${d.user.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                       {d.user.enabled ? 'Active' : 'Inactive'}
