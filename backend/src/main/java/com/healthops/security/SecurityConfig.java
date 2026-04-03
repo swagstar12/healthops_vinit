@@ -63,15 +63,17 @@ public class SecurityConfig {
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
-            .requestMatchers(HttpMethod.GET, "/api/auth/test").permitAll()
-            .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Allow preflight requests
-            .requestMatchers("/api/admin/**").hasRole("ADMIN")
-            .requestMatchers("/api/doctor/**").hasAnyRole("DOCTOR", "ADMIN")
-            .requestMatchers("/api/reception/**").hasAnyRole("RECEPTIONIST", "ADMIN")
-            .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "DOCTOR", "RECEPTIONIST")
-            .anyRequest().authenticated()
+          .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+          .requestMatchers(HttpMethod.GET, "/api/auth/test").permitAll()
+          .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()     // ← ADD THIS
+          .requestMatchers(HttpMethod.POST, "/api/public/**").permitAll()    // ← ADD THIS
+          .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+          .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+          .requestMatchers("/api/admin/**").hasRole("ADMIN")
+          .requestMatchers("/api/doctor/**").hasAnyRole("DOCTOR", "ADMIN")
+          .requestMatchers("/api/reception/**").hasAnyRole("RECEPTIONIST", "ADMIN")
+          .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "DOCTOR", "RECEPTIONIST")
+          .anyRequest().authenticated()
         )
         .addFilterBefore(new JwtAuthFilter(jwtService, userService), UsernamePasswordAuthenticationFilter.class);
       return http.build();
