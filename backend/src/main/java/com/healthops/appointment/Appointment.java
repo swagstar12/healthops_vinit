@@ -25,7 +25,8 @@ public class Appointment {
 
   private Instant scheduledAt;
   private String status;
-  @Lob
+
+  // FIXED: Removed @Lob — causes PostgreSQL "Large Objects in auto-commit mode" error
   @Column(columnDefinition = "text")
   private String reason;
 

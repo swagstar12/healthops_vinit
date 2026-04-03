@@ -19,7 +19,8 @@ public class Patient {
 
   private LocalDate dob;
   private String phone;
-  @Lob
+
+  // FIXED: Removed @Lob — causes PostgreSQL "Large Objects in auto-commit mode" error
   @Column(columnDefinition = "text")
   private String address;
 }

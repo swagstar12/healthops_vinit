@@ -29,13 +29,14 @@ public class Visit {
 
   private Instant visitAt = Instant.now();
 
-  @Lob
+  // FIXED: Removed @Lob — use columnDefinition = "text" directly without @Lob
+  // @Lob with PostgreSQL causes "Large Objects may not be used in auto-commit mode"
   @Column(columnDefinition = "text")
   private String notes;
-  @Lob
+
   @Column(columnDefinition = "text")
   private String diagnosis;
-  @Lob
+
   @Column(columnDefinition = "text")
   private String prescription;
 }
