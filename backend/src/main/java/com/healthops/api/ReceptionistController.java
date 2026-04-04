@@ -41,22 +41,23 @@ public class ReceptionistController {
   private final AvailabilityRepository availRepo;
   private final HolidayRepository holidayRepo;
 
-  public ReceptionistController(PatientRepository patientRepo, AppointmentRepository apptRepo, 
+  public ReceptionistController(PatientRepository patientRepo, AppointmentRepository apptRepo,
                                DoctorRepository doctorRepo, UserService userService,
                                VisitRepository visitRepo, AvailabilityRepository availRepo,
                                HolidayRepository holidayRepo) {
-    this.patientRepo = patientRepo; 
-    this.apptRepo = apptRepo; 
-    this.doctorRepo = doctorRepo; 
+    this.patientRepo = patientRepo;
+    this.apptRepo = apptRepo;
+    this.doctorRepo = doctorRepo;
     this.userService = userService;
     this.visitRepo = visitRepo;
     this.availRepo = availRepo;
     this.holidayRepo = holidayRepo;
   }
 
-  // Enhanced Patient Management
+  // ─── Patient Management ───────────────────────────────────────────────────
+
   @PostMapping("/patients")
-  public Patient createPatient(@RequestBody CreatePatientRequest req) {
+  public ResponseEntity<?> createPatient(@RequestBody CreatePatientRequest req) {
     var p = Patient.builder()
         .code(req.code())
         .fullName(req.fullName())
@@ -64,12 +65,17 @@ public class ReceptionistController {
         .phone(req.phone())
         .address(req.address())
         .build();
-    return patientRepo.save(p);
+
+    if (req.doctorId() != null) {
+      doctorRepo.findById(req.doctorId()).ifPresent(doc -> p.getDoctors().add(doc));
+    }
+
+    return ResponseEntity.ok(patientRepo.save(p));
   }
 
   @GetMapping("/patients")
-  public List<Patient> listPatients() { 
-    return patientRepo.findAll(); 
+  public List<Patient> listPatients() {
+    return patientRepo.findAll();
   }
 
   @GetMapping("/patients/{id}")
@@ -82,16 +88,16 @@ public class ReceptionistController {
   @PutMapping("/patients/{id}")
   public ResponseEntity<Patient> updatePatient(@PathVariable Long id, @RequestBody UpdatePatientRequest req) {
     return patientRepo.findById(id).map(p -> {
-      p.setFullName(req.fullName()); 
-      p.setDob(req.dob()); 
-      p.setPhone(req.phone()); 
+      p.setFullName(req.fullName());
+      p.setDob(req.dob());
+      p.setPhone(req.phone());
       p.setAddress(req.address());
       return ResponseEntity.ok(patientRepo.save(p));
     }).orElse(ResponseEntity.notFound().build());
   }
 
   @DeleteMapping("/patients/{id}")
-  public ResponseEntity<?> deletePatient(@PathVariable Long id) { 
+  public ResponseEntity<?> deletePatient(@PathVariable Long id) {
     if (patientRepo.existsById(id)) {
       patientRepo.deleteById(id);
       return ResponseEntity.ok().build();
@@ -99,7 +105,30 @@ public class ReceptionistController {
     return ResponseEntity.notFound().build();
   }
 
-  // Enhanced Doctor Management
+  // ─── Assign doctor to existing patient ───────────────────────────────────
+
+  @PostMapping("/patients/{patientId}/doctors/{doctorId}")
+  public ResponseEntity<?> assignDoctorToPatient(@PathVariable Long patientId, @PathVariable Long doctorId) {
+    var patient = patientRepo.findById(patientId).orElse(null);
+    if (patient == null) return ResponseEntity.notFound().build();
+    var doctor = doctorRepo.findById(doctorId).orElse(null);
+    if (doctor == null) return ResponseEntity.notFound().build();
+    patient.getDoctors().add(doctor);
+    patientRepo.save(patient);
+    return ResponseEntity.ok(Map.of("message", "Doctor assigned to patient"));
+  }
+
+  @DeleteMapping("/patients/{patientId}/doctors/{doctorId}")
+  public ResponseEntity<?> removeDoctorFromPatient(@PathVariable Long patientId, @PathVariable Long doctorId) {
+    var patient = patientRepo.findById(patientId).orElse(null);
+    if (patient == null) return ResponseEntity.notFound().build();
+    patient.getDoctors().removeIf(d -> d.getId().equals(doctorId));
+    patientRepo.save(patient);
+    return ResponseEntity.ok(Map.of("message", "Doctor removed from patient"));
+  }
+
+  // ─── Doctor Management ────────────────────────────────────────────────────
+
   @PostMapping("/doctors")
   public Doctor addDoctor(@RequestBody CreateDoctorRequest req) {
     var u = userService.register(req.email(), req.fullName(), req.password(), Role.DOCTOR);
@@ -124,7 +153,7 @@ public class ReceptionistController {
   }
 
   @DeleteMapping("/doctors/{id}")
-  public ResponseEntity<?> deleteDoctor(@PathVariable Long id) { 
+  public ResponseEntity<?> deleteDoctor(@PathVariable Long id) {
     if (doctorRepo.existsById(id)) {
       doctorRepo.deleteById(id);
       return ResponseEntity.ok().build();
@@ -132,7 +161,8 @@ public class ReceptionistController {
     return ResponseEntity.notFound().build();
   }
 
-  // Doctor Availability Management (for receptionists to manage)
+  // ─── Doctor Availability ──────────────────────────────────────────────────
+
   @PostMapping("/doctors/{doctorId}/availability")
   public Availability addDoctorAvailability(@PathVariable Long doctorId, @RequestBody AvailabilityRequest req) {
     var doctor = doctorRepo.findById(doctorId).orElseThrow();
@@ -169,7 +199,8 @@ public class ReceptionistController {
     return ResponseEntity.notFound().build();
   }
 
-  // Doctor Holiday Management (for receptionists to manage)
+  // ─── Doctor Holidays ──────────────────────────────────────────────────────
+
   @PostMapping("/doctors/{doctorId}/holidays")
   public Holiday addDoctorHoliday(@PathVariable Long doctorId, @RequestBody HolidayRequest req) {
     var doctor = doctorRepo.findById(doctorId).orElseThrow();
@@ -204,7 +235,8 @@ public class ReceptionistController {
     return ResponseEntity.notFound().build();
   }
 
-  // Enhanced Appointment Management
+  // ─── Appointments ─────────────────────────────────────────────────────────
+
   @PostMapping("/appointments")
   public Appointment createAppointment(@RequestBody CreateAppointmentRequest req) {
     var p = patientRepo.findById(req.patientId()).orElseThrow();
@@ -220,8 +252,8 @@ public class ReceptionistController {
   }
 
   @GetMapping("/appointments")
-  public List<Appointment> listAppointments() { 
-    return apptRepo.findAll(); 
+  public List<Appointment> listAppointments() {
+    return apptRepo.findAll();
   }
 
   @GetMapping("/appointments/{id}")
@@ -232,7 +264,8 @@ public class ReceptionistController {
   }
 
   @PutMapping("/appointments/{id}")
-  public ResponseEntity<Appointment> updateAppointment(@PathVariable Long id, @RequestBody UpdateAppointmentRequest req) {
+  public ResponseEntity<Appointment> updateAppointment(@PathVariable Long id,
+      @RequestBody UpdateAppointmentRequest req) {
     return apptRepo.findById(id).map(appointment -> {
       appointment.setScheduledAt(req.scheduledAt());
       appointment.setReason(req.reason());
@@ -242,7 +275,8 @@ public class ReceptionistController {
   }
 
   @PutMapping("/appointments/{id}/status")
-  public ResponseEntity<Appointment> updateStatus(@PathVariable Long id, @RequestBody UpdateStatusRequest req) {
+  public ResponseEntity<Appointment> updateStatus(@PathVariable Long id,
+      @RequestBody UpdateStatusRequest req) {
     return apptRepo.findById(id).map(a -> {
       a.setStatus(req.status());
       return ResponseEntity.ok(apptRepo.save(a));
@@ -258,7 +292,8 @@ public class ReceptionistController {
     return ResponseEntity.notFound().build();
   }
 
-  // Visit History
+  // ─── Visit History ────────────────────────────────────────────────────────
+
   @GetMapping("/patients/{patientId}/visits")
   public List<com.healthops.visit.Visit> getPatientVisitHistory(@PathVariable Long patientId) {
     return visitRepo.findByPatientIdOrderByVisitAtDesc(patientId);
@@ -269,11 +304,11 @@ public class ReceptionistController {
     return visitRepo.findAll();
   }
 
-  // Enhanced Reports
+  // ─── Reports ──────────────────────────────────────────────────────────────
+
   @GetMapping("/reports/patients.csv")
   public ResponseEntity<byte[]> downloadPatientsReport() {
     var patients = patientRepo.findAll();
-    
     String header = "Patient Code,Full Name,Date of Birth,Phone,Address,Total Visits\n";
     String body = patients.stream().map(p -> String.join(",",
         safe(p.getCode()),
@@ -283,10 +318,7 @@ public class ReceptionistController {
         safe(p.getAddress()),
         String.valueOf(visitRepo.countByPatientId(p.getId()))
     )).collect(Collectors.joining("\n"));
-    
-    String csv = header + body + "\n";
-    byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
-    
+    byte[] bytes = (header + body + "\n").getBytes(StandardCharsets.UTF_8);
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=patients-report.csv")
         .contentType(MediaType.TEXT_PLAIN)
@@ -297,7 +329,6 @@ public class ReceptionistController {
   public ResponseEntity<byte[]> downloadPatientVisitsReport(@PathVariable Long patientId) {
     var visits = visitRepo.findByPatientIdOrderByVisitAtDesc(patientId);
     var patient = patientRepo.findById(patientId).orElseThrow();
-    
     String header = "Visit Date,Doctor,Diagnosis,Prescription,Notes\n";
     String body = visits.stream().map(v -> String.join(",",
         v.getVisitAt().toString(),
@@ -306,12 +337,10 @@ public class ReceptionistController {
         safe(v.getPrescription()),
         safe(v.getNotes())
     )).collect(Collectors.joining("\n"));
-    
-    String csv = header + body + "\n";
-    byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
-    
+    byte[] bytes = (header + body + "\n").getBytes(StandardCharsets.UTF_8);
     return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=patient-" + patient.getCode() + "-visits.csv")
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=patient-" + patient.getCode() + "-visits.csv")
         .contentType(MediaType.TEXT_PLAIN)
         .body(bytes);
   }
@@ -319,7 +348,6 @@ public class ReceptionistController {
   @GetMapping("/reports/appointments.csv")
   public ResponseEntity<byte[]> downloadAppointmentsReport() {
     var appointments = apptRepo.findAll();
-    
     String header = "Appointment ID,Patient Code,Patient Name,Doctor,Scheduled Date,Status,Reason\n";
     String body = appointments.stream().map(a -> String.join(",",
         String.valueOf(a.getId()),
@@ -330,17 +358,15 @@ public class ReceptionistController {
         safe(a.getStatus()),
         safe(a.getReason())
     )).collect(Collectors.joining("\n"));
-    
-    String csv = header + body + "\n";
-    byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
-    
+    byte[] bytes = (header + body + "\n").getBytes(StandardCharsets.UTF_8);
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=appointments-report.csv")
         .contentType(MediaType.TEXT_PLAIN)
         .body(bytes);
   }
 
-  // Dashboard Statistics
+  // ─── Dashboard Stats ──────────────────────────────────────────────────────
+
   @GetMapping("/dashboard/stats")
   public Map<String, Object> getDashboardStats() {
     return Map.of(
@@ -355,7 +381,8 @@ public class ReceptionistController {
     );
   }
 
-  // Search functionality
+  // ─── Search ───────────────────────────────────────────────────────────────
+
   @GetMapping("/patients/search")
   public List<Patient> searchPatients(@RequestParam String query) {
     return patientRepo.findByFullNameContainingIgnoreCaseOrCodeContainingIgnoreCase(query, query);
@@ -366,8 +393,7 @@ public class ReceptionistController {
     return apptRepo.searchByPatientNameOrCode(query);
   }
 
-
-  private String safe(String s) { 
-    return s == null ? "" : s.replaceAll("[\r\n,]", " "); 
+  private String safe(String s) {
+    return s == null ? "" : s.replaceAll("[\r\n,]", " ");
   }
 }

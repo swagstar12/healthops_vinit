@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { api } from '../api'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type Patient = { id: number; code: string; fullName: string; phone?: string; dob?: string; address?: string }
 type Doctor  = { id: number; user: { fullName: string; email: string }; specialization?: string; phone?: string }
 type Appointment = { id: number; patient: Patient; doctor: Doctor; scheduledAt: string; status: string; reason?: string }
@@ -14,7 +13,6 @@ type Errs   = Record<string, string>
 
 const DAYS = ['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function apiErr(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
     const r = (e as any).response
@@ -44,7 +42,6 @@ async function dlBlob(url: string, filename: string): Promise<void> {
   URL.revokeObjectURL(a.href)
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
 function Toasts({ list, remove }: { list: Toast[]; remove: (id: number) => void }) {
   return (
     <div className="fixed top-4 right-4 z-[300] flex flex-col gap-2 pointer-events-none w-80">
@@ -62,7 +59,6 @@ function Toasts({ list, remove }: { list: Toast[]; remove: (id: number) => void 
   )
 }
 
-// ─── Confirm Dialog ───────────────────────────────────────────────────────────
 function Confirm({ title, msg, onYes, onNo }: { title: string; msg: string; onYes: () => void; onNo: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
@@ -79,10 +75,8 @@ function Confirm({ title, msg, onYes, onNo }: { title: string; msg: string; onYe
   )
 }
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
 function Spin() { return <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" /> }
 
-// ─── Field wrapper ────────────────────────────────────────────────────────────
 function F({ label, err, req, children }: { label: string; err?: string; req?: boolean; children: React.ReactNode }) {
   return (
     <div>
@@ -98,7 +92,6 @@ function F({ label, err, req, children }: { label: string; err?: string; req?: b
 const I  = `w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all`
 const IE = `w-full px-3.5 py-2.5 border border-red-300 rounded-xl text-sm bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all`
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
 function Badge({ s }: { s: string }) {
   const m: Record<string,string> = {
     SCHEDULED: 'bg-amber-100 text-amber-800',
@@ -108,7 +101,6 @@ function Badge({ s }: { s: string }) {
   return <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${m[s]??'bg-gray-100 text-gray-700'}`}>{s}</span>
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function ReceptionDashboard() {
   const [tab, setTab]           = useState('dashboard')
   const [patients, setPatients] = useState<Patient[]>([])
@@ -122,23 +114,20 @@ export default function ReceptionDashboard() {
   const [pSearch, setPSearch] = useState('')
   const [aSearch, setASearch] = useState('')
 
-  // patient form
-  const [pForm, setPForm] = useState({ code:'', fullName:'', dob:'', phone:'', address:'' })
+  // ✅ Added doctorId to patient form
+  const [pForm, setPForm] = useState({ code:'', fullName:'', dob:'', phone:'', address:'', doctorId:'' })
   const [pErr, setPErr]   = useState<Errs>({})
   const [editP, setEditP] = useState<Patient|null>(null)
   const pRef = useRef<HTMLDivElement>(null)
 
-  // doctor form
   const [dForm, setDForm] = useState({ email:'', fullName:'', password:'', specialization:'', phone:'' })
   const [dErr, setDErr]   = useState<Errs>({})
 
-  // appointment form
   const [aForm, setAForm] = useState({ patientId:0, doctorId:0, scheduledAt:'', reason:'' })
   const [aErr, setAErr]   = useState<Errs>({})
   const [editA, setEditA] = useState<Appointment|null>(null)
   const aRef = useRef<HTMLDivElement>(null)
 
-  // schedule
   const [selDoc, setSelDoc] = useState(0)
   const [avails, setAvails] = useState<Avail[]>([])
   const [hols, setHols]     = useState<Holiday[]>([])
@@ -147,11 +136,9 @@ export default function ReceptionDashboard() {
   const [hForm, setHForm]   = useState({ date:'', reason:'' })
   const [hErr, setHErr]     = useState<Errs>({})
 
-  // modals
   const [visitsModal, setVisitsModal] = useState<{patient:Patient;list:Visit[]}|null>(null)
   const [confirm, setConfirm]         = useState<{title:string;msg:string;fn:()=>void}|null>(null)
 
-  // toasts
   const [toasts, setToasts] = useState<Toast[]>([])
   const tid = useRef(0)
 
@@ -182,7 +169,8 @@ export default function ReceptionDashboard() {
     finally { setLoading(false) }
   }
 
-  // ══ PATIENTS ══════════════════════════════════════════════════════════════
+  // ── PATIENTS ──────────────────────────────────────────────────────────────
+
   function valP(f: typeof pForm, isEdit: boolean): Errs {
     const e: Errs = {}
     if (!isEdit) {
@@ -220,21 +208,27 @@ export default function ReceptionDashboard() {
           dob:      pForm.dob || null,
           phone:    pForm.phone.trim(),
           address:  pForm.address.trim(),
+          // ✅ Send doctorId if selected
+          doctorId: pForm.doctorId ? Number(pForm.doctorId) : null,
         })
         toast(`Patient "${pForm.fullName}" added`)
-        setPForm({ code:'', fullName:'', dob:'', phone:'', address:'' })
+        setPForm({ code:'', fullName:'', dob:'', phone:'', address:'', doctorId:'' })
       }
       await load()
     } catch(err) { toast(apiErr(err),'err') }
     finally { end('pForm') }
   }
 
-  function resetP() { setEditP(null); setPErr({}); setPForm({ code:'', fullName:'', dob:'', phone:'', address:'' }) }
+  // ✅ Reset includes doctorId
+  function resetP() {
+    setEditP(null); setPErr({})
+    setPForm({ code:'', fullName:'', dob:'', phone:'', address:'', doctorId:'' })
+  }
 
   function startEditP(p: Patient) {
     setEditP(p)
     setPErr({})
-    setPForm({ code:p.code, fullName:p.fullName, dob:p.dob||'', phone:p.phone||'', address:p.address||'' })
+    setPForm({ code:p.code, fullName:p.fullName, dob:p.dob||'', phone:p.phone||'', address:p.address||'', doctorId:'' })
     setTab('patients')
     setTimeout(() => pRef.current?.scrollIntoView({ behavior:'smooth', block:'start' }), 80)
   }
@@ -275,7 +269,8 @@ export default function ReceptionDashboard() {
     } catch(e) { toast(apiErr(e),'err') }
   }
 
-  // ══ DOCTORS ═══════════════════════════════════════════════════════════════
+  // ── DOCTORS ───────────────────────────────────────────────────────────────
+
   function valD(f: typeof dForm): Errs {
     const e: Errs = {}
     if (!f.email.trim())          e.email = 'Email required'
@@ -313,7 +308,8 @@ export default function ReceptionDashboard() {
     finally { end(`dd_${d.id}`) }
   }
 
-  // ══ APPOINTMENTS ══════════════════════════════════════════════════════════
+  // ── APPOINTMENTS ──────────────────────────────────────────────────────────
+
   function valA(f: typeof aForm): Errs {
     const e: Errs = {}
     if (!f.patientId)   e.patientId  = 'Select a patient'
@@ -385,7 +381,8 @@ export default function ReceptionDashboard() {
     finally { end(`da_${a.id}`) }
   }
 
-  // ══ SCHEDULE ══════════════════════════════════════════════════════════════
+  // ── SCHEDULE ──────────────────────────────────────────────────────────────
+
   async function loadSched(id: number) {
     if (!id) return
     go('sched')
@@ -454,7 +451,8 @@ export default function ReceptionDashboard() {
     finally { end(`dh_${id}`) }
   }
 
-  // ── Derived ────────────────────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
+
   const filtP = patients.filter(p =>
     p.fullName.toLowerCase().includes(pSearch.toLowerCase()) ||
     p.code.includes(pSearch) ||
@@ -655,6 +653,30 @@ export default function ReceptionDashboard() {
                       onChange={e => setPForm(f=>({...f,address:e.target.value}))} />
                   </F>
                 </div>
+
+                {/* ✅ NEW: Doctor assignment — only shown when creating, not editing */}
+                {!editP && (
+                  <div className="md:col-span-2">
+                    <F label="Consulting Doctor">
+                      <select
+                        className={I}
+                        value={pForm.doctorId}
+                        onChange={e => setPForm(f=>({...f, doctorId: e.target.value}))}
+                      >
+                        <option value="">— Select consulting doctor (optional) —</option>
+                        {doctors.map(d => (
+                          <option key={d.id} value={d.id}>
+                            Dr. {d.user?.fullName} – {d.specialization || 'General'}
+                          </option>
+                        ))}
+                      </select>
+                    </F>
+                    <p className="text-xs text-gray-400 mt-1">
+                      💡 The selected doctor will see this patient in their dashboard
+                    </p>
+                  </div>
+                )}
+
                 <div className="md:col-span-2 flex justify-end">
                   <button type="submit" disabled={!!busy.pForm}
                     className="flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm">

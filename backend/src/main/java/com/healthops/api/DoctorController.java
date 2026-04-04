@@ -10,7 +10,6 @@ import com.healthops.patient.PatientRepository;
 import com.healthops.visit.Visit;
 import com.healthops.visit.VisitRepository;
 import com.healthops.appointment.AppointmentRepository;
-import com.healthops.user.User;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,60 +34,73 @@ public class DoctorController {
   private final VisitRepository visitRepo;
   private final AppointmentRepository appointmentRepo;
 
-  public DoctorController(DoctorRepository doctorRepo, AvailabilityRepository availRepo, 
-                         HolidayRepository holidayRepo, PatientRepository patientRepo, 
+  public DoctorController(DoctorRepository doctorRepo, AvailabilityRepository availRepo,
+                         HolidayRepository holidayRepo, PatientRepository patientRepo,
                          VisitRepository visitRepo, AppointmentRepository appointmentRepo) {
-    this.doctorRepo = doctorRepo; 
-    this.availRepo = availRepo; 
-    this.holidayRepo = holidayRepo; 
-    this.patientRepo = patientRepo; 
+    this.doctorRepo = doctorRepo;
+    this.availRepo = availRepo;
+    this.holidayRepo = holidayRepo;
+    this.patientRepo = patientRepo;
     this.visitRepo = visitRepo;
     this.appointmentRepo = appointmentRepo;
   }
 
-  // Get current doctor's information
+  // ─── Profile ──────────────────────────────────────────────────────────────
+
   @GetMapping("/profile")
   public ResponseEntity<Doctor> getCurrentDoctor(Authentication auth) {
-    String email = auth.getName();
-    return doctorRepo.findByUserEmail(email)
+    return doctorRepo.findByUserEmail(auth.getName())
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.notFound().build());
   }
 
-  // Patient Management
+  // ─── Patients (only this doctor's assigned patients) ──────────────────────
+
   @GetMapping("/patients")
-  public List<Patient> listPatients() { 
-    return patientRepo.findAll(); 
+  public List<Patient> listPatients(Authentication auth) {
+    var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
+    return patientRepo.findByDoctorsId(doctor.getId());
   }
 
   @GetMapping("/patients/{id}")
-  public ResponseEntity<Patient> getPatient(@PathVariable Long id) {
+  public ResponseEntity<Patient> getPatient(@PathVariable Long id, Authentication auth) {
+    var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
     return patientRepo.findById(id)
+        .filter(p -> p.getDoctors().stream().anyMatch(d -> d.getId().equals(doctor.getId())))
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.notFound().build());
   }
 
   @PutMapping("/patients/{id}")
-  public ResponseEntity<Patient> editPatient(@PathVariable Long id, @RequestBody Patient updated) {
-    return patientRepo.findById(id).map(p -> {
-      p.setFullName(updated.getFullName());
-      p.setDob(updated.getDob());
-      p.setPhone(updated.getPhone());
-      p.setAddress(updated.getAddress());
-      return ResponseEntity.ok(patientRepo.save(p));
-    }).orElse(ResponseEntity.notFound().build());
+  public ResponseEntity<Patient> editPatient(@PathVariable Long id,
+      @RequestBody Patient updated, Authentication auth) {
+    var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
+    return patientRepo.findById(id)
+        .filter(p -> p.getDoctors().stream().anyMatch(d -> d.getId().equals(doctor.getId())))
+        .map(p -> {
+          p.setFullName(updated.getFullName());
+          p.setDob(updated.getDob());
+          p.setPhone(updated.getPhone());
+          p.setAddress(updated.getAddress());
+          return ResponseEntity.ok(patientRepo.save(p));
+        }).orElse(ResponseEntity.notFound().build());
   }
 
-  // Visit Management
+  // ─── Visits ───────────────────────────────────────────────────────────────
+
   @PostMapping("/visits")
   public Visit createVisit(@RequestBody CreateVisitRequest req, Authentication auth) {
     var patient = patientRepo.findById(req.patientId()).orElseThrow();
-    var appointment = req.appointmentId() != null ? 
+    var appointment = req.appointmentId() != null ?
         appointmentRepo.findById(req.appointmentId()).orElse(null) : null;
-    
-    // Get current doctor
     var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
-    
+
+    // Auto-link patient to this doctor if not already linked
+    if (patient.getDoctors().stream().noneMatch(d -> d.getId().equals(doctor.getId()))) {
+      patient.getDoctors().add(doctor);
+      patientRepo.save(patient);
+    }
+
     var visit = Visit.builder()
         .patient(patient)
         .doctor(doctor)
@@ -98,7 +110,6 @@ public class DoctorController {
         .diagnosis(req.diagnosis())
         .prescription(req.prescription())
         .build();
-    
     return visitRepo.save(visit);
   }
 
@@ -121,7 +132,8 @@ public class DoctorController {
   }
 
   @PutMapping("/visits/{id}")
-  public ResponseEntity<Visit> updateVisit(@PathVariable Long id, @RequestBody UpdateVisitRequest req) {
+  public ResponseEntity<Visit> updateVisit(@PathVariable Long id,
+      @RequestBody UpdateVisitRequest req) {
     return visitRepo.findById(id).map(visit -> {
       visit.setNotes(req.notes());
       visit.setDiagnosis(req.diagnosis());
@@ -139,7 +151,8 @@ public class DoctorController {
     return ResponseEntity.notFound().build();
   }
 
-  // Availability Management
+  // ─── Availability ─────────────────────────────────────────────────────────
+
   @PostMapping("/availability")
   public Availability addAvailability(@RequestBody AvailabilityRequest req, Authentication auth) {
     var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
@@ -159,7 +172,8 @@ public class DoctorController {
   }
 
   @PutMapping("/availability/{id}")
-  public ResponseEntity<Availability> updateAvailability(@PathVariable Long id, @RequestBody AvailabilityRequest req) {
+  public ResponseEntity<Availability> updateAvailability(@PathVariable Long id,
+      @RequestBody AvailabilityRequest req) {
     return availRepo.findById(id).map(avail -> {
       avail.setDayOfWeek(req.dayOfWeek());
       avail.setStartTime(req.startTime());
@@ -177,7 +191,8 @@ public class DoctorController {
     return ResponseEntity.notFound().build();
   }
 
-  // Holiday Management
+  // ─── Holidays ─────────────────────────────────────────────────────────────
+
   @PostMapping("/holidays")
   public Holiday addHoliday(@RequestBody HolidayRequest req, Authentication auth) {
     var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
@@ -196,7 +211,8 @@ public class DoctorController {
   }
 
   @PutMapping("/holidays/{id}")
-  public ResponseEntity<Holiday> updateHoliday(@PathVariable Long id, @RequestBody HolidayRequest req) {
+  public ResponseEntity<Holiday> updateHoliday(@PathVariable Long id,
+      @RequestBody HolidayRequest req) {
     return holidayRepo.findById(id).map(holiday -> {
       holiday.setDate(req.date());
       holiday.setReason(req.reason());
@@ -213,12 +229,12 @@ public class DoctorController {
     return ResponseEntity.notFound().build();
   }
 
-  // Reports
+  // ─── Reports ──────────────────────────────────────────────────────────────
+
   @GetMapping("/reports/visits.csv")
   public ResponseEntity<byte[]> downloadAllVisitsCsv(Authentication auth) {
     var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
     var visits = visitRepo.findByDoctorIdOrderByVisitAtDesc(doctor.getId());
-    
     String header = "Visit Date,Patient Code,Patient Name,Diagnosis,Prescription,Notes\n";
     String body = visits.stream().map(v -> String.join(",",
         v.getVisitAt().toString(),
@@ -228,10 +244,7 @@ public class DoctorController {
         safe(v.getPrescription()),
         safe(v.getNotes())
     )).collect(Collectors.joining("\n"));
-    
-    String csv = header + body + "\n";
-    byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
-    
+    byte[] bytes = (header + body + "\n").getBytes(StandardCharsets.UTF_8);
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=doctor-visits-report.csv")
         .contentType(MediaType.TEXT_PLAIN)
@@ -242,7 +255,6 @@ public class DoctorController {
   public ResponseEntity<byte[]> downloadPatientVisitsCsv(@PathVariable Long patientId) {
     var visits = visitRepo.findByPatientIdOrderByVisitAtDesc(patientId);
     var patient = patientRepo.findById(patientId).orElseThrow();
-    
     String header = "Visit Date,Doctor,Diagnosis,Prescription,Notes\n";
     String body = visits.stream().map(v -> String.join(",",
         v.getVisitAt().toString(),
@@ -251,22 +263,21 @@ public class DoctorController {
         safe(v.getPrescription()),
         safe(v.getNotes())
     )).collect(Collectors.joining("\n"));
-    
-    String csv = header + body + "\n";
-    byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
-    
+    byte[] bytes = (header + body + "\n").getBytes(StandardCharsets.UTF_8);
     return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=patient-" + patient.getCode() + "-visits.csv")
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=patient-" + patient.getCode() + "-visits.csv")
         .contentType(MediaType.TEXT_PLAIN)
         .body(bytes);
   }
 
-  // Dashboard Stats
+  // ─── Dashboard Stats ──────────────────────────────────────────────────────
+
   @GetMapping("/dashboard/stats")
   public Map<String, Object> getDashboardStats(Authentication auth) {
     var doctor = doctorRepo.findByUserEmail(auth.getName()).orElseThrow();
     return Map.of(
-        "totalPatients", patientRepo.count(),
+        "totalPatients", patientRepo.findByDoctorsId(doctor.getId()).size(),
         "myVisitsCount", visitRepo.countByDoctorId(doctor.getId()),
         "todayVisits", visitRepo.countTodayVisitsByDoctor(doctor.getId()),
         "myAppointments", appointmentRepo.countByDoctorId(doctor.getId()),
@@ -275,7 +286,7 @@ public class DoctorController {
     );
   }
 
-  private String safe(String s) { 
-    return s == null ? "" : s.replaceAll("[\r\n,]", " "); 
+  private String safe(String s) {
+    return s == null ? "" : s.replaceAll("[\r\n,]", " ");
   }
 }
