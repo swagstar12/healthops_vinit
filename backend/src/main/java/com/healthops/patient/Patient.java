@@ -1,6 +1,6 @@
 package com.healthops.patient;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.healthops.doctor.Doctor;
 import jakarta.persistence.*;
 import lombok.*;
@@ -33,7 +33,7 @@ public class Patient {
     joinColumns = @JoinColumn(name = "patient_id"),
     inverseJoinColumns = @JoinColumn(name = "doctor_id")
   )
-  @JsonIgnoreProperties({"user", "specialization", "phone", "consultationFee", "doctors"})
+  @JsonIgnore
   @Builder.Default
   private Set<Doctor> doctors = new HashSet<>();
 }

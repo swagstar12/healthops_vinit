@@ -4,7 +4,7 @@ import { api } from '../api'
 type Patient = { id: number; code: string; fullName: string; phone?: string; dob?: string; address?: string }
 type Doctor  = { id: number; user: { fullName: string; email: string }; specialization?: string; phone?: string }
 type Appointment = { id: number; patient: Patient; doctor: Doctor; scheduledAt: string; status: string; reason?: string }
-type Visit  = { id: number; patient: Patient; doctor: Doctor; visitAt: string; notes?: string; diagnosis?: string; prescription?: string }
+type Visit  = { id: number; patient: Patient; doctor?: Doctor | null; visitAt: string; notes?: string; diagnosis?: string; prescription?: string }
 type Avail  = { id: number; dayOfWeek: number; startTime: string; endTime: string }
 type Holiday = { id: number; date: string; reason: string }
 type Stats  = { totalPatients: number; totalDoctors: number; totalAppointments: number; todayAppointments: number; scheduledAppointments: number; completedAppointments: number; cancelledAppointments: number; totalVisits: number }
@@ -101,6 +101,11 @@ function Badge({ s }: { s: string }) {
   return <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${m[s]??'bg-gray-100 text-gray-700'}`}>{s}</span>
 }
 
+// Safe helper to get doctor name
+function doctorName(doctor?: Doctor | null): string {
+  return doctor?.user?.fullName ?? '—'
+}
+
 export default function ReceptionDashboard() {
   const [tab, setTab]           = useState('dashboard')
   const [patients, setPatients] = useState<Patient[]>([])
@@ -114,7 +119,6 @@ export default function ReceptionDashboard() {
   const [pSearch, setPSearch] = useState('')
   const [aSearch, setASearch] = useState('')
 
-  // ✅ Added doctorId to patient form
   const [pForm, setPForm] = useState({ code:'', fullName:'', dob:'', phone:'', address:'', doctorId:'' })
   const [pErr, setPErr]   = useState<Errs>({})
   const [editP, setEditP] = useState<Patient|null>(null)
@@ -163,8 +167,11 @@ export default function ReceptionDashboard() {
         api.get('/reception/visits'),
         api.get('/reception/dashboard/stats'),
       ])
-      setPatients(p.data); setDoctors(d.data); setAppts(a.data)
-      setVisits(v.data);   setStats(s.data)
+      setPatients(p.data ?? [])
+      setDoctors(d.data ?? [])
+      setAppts(a.data ?? [])
+      setVisits(v.data ?? [])
+      setStats(s.data)
     } catch(e) { toast(apiErr(e),'err') }
     finally { setLoading(false) }
   }
@@ -208,7 +215,6 @@ export default function ReceptionDashboard() {
           dob:      pForm.dob || null,
           phone:    pForm.phone.trim(),
           address:  pForm.address.trim(),
-          // ✅ Send doctorId if selected
           doctorId: pForm.doctorId ? Number(pForm.doctorId) : null,
         })
         toast(`Patient "${pForm.fullName}" added`)
@@ -219,7 +225,6 @@ export default function ReceptionDashboard() {
     finally { end('pForm') }
   }
 
-  // ✅ Reset includes doctorId
   function resetP() {
     setEditP(null); setPErr({})
     setPForm({ code:'', fullName:'', dob:'', phone:'', address:'', doctorId:'' })
@@ -248,7 +253,7 @@ export default function ReceptionDashboard() {
     go(`vv_${p.id}`)
     try {
       const r = await api.get(`/reception/patients/${p.id}/visits`)
-      setVisitsModal({ patient:p, list:r.data })
+      setVisitsModal({ patient:p, list:r.data ?? [] })
     } catch(e) { toast(apiErr(e),'err') }
     finally { end(`vv_${p.id}`) }
   }
@@ -302,7 +307,7 @@ export default function ReceptionDashboard() {
     go(`dd_${d.id}`)
     try {
       await api.delete(`/reception/doctors/${d.id}`)
-      toast(`Dr. ${d.user.fullName} removed`,'info')
+      toast(`Dr. ${d.user?.fullName ?? '?'} removed`,'info')
       await load()
     } catch(e) { toast(apiErr(e),'err') }
     finally { end(`dd_${d.id}`) }
@@ -391,7 +396,7 @@ export default function ReceptionDashboard() {
         api.get(`/reception/doctors/${id}/availability`),
         api.get(`/reception/doctors/${id}/holidays`),
       ])
-      setAvails(ar.data); setHols(hr.data); setSelDoc(id)
+      setAvails(ar.data ?? []); setHols(hr.data ?? []); setSelDoc(id)
     } catch(e) { toast(apiErr(e),'err') }
     finally { end('sched') }
   }
@@ -459,9 +464,9 @@ export default function ReceptionDashboard() {
     (p.phone||'').includes(pSearch)
   )
   const filtA = appts.filter(a =>
-    a.patient.fullName.toLowerCase().includes(aSearch.toLowerCase()) ||
-    a.patient.code.includes(aSearch) ||
-    a.doctor.user.fullName.toLowerCase().includes(aSearch.toLowerCase())
+    a.patient?.fullName?.toLowerCase().includes(aSearch.toLowerCase()) ||
+    a.patient?.code?.includes(aSearch) ||
+    (a.doctor?.user?.fullName ?? '').toLowerCase().includes(aSearch.toLowerCase())
   )
 
   if (loading) return (
@@ -512,7 +517,7 @@ export default function ReceptionDashboard() {
                     {visitsModal.list.map(v => (
                       <div key={v.id} className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50">
                         <p className="font-semibold text-gray-800 text-sm">{new Date(v.visitAt).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</p>
-                        <p className="text-xs text-violet-600 mt-0.5 mb-3">Dr. {v.doctor?.user?.fullName||'—'}</p>
+                        <p className="text-xs text-violet-600 mt-0.5 mb-3">Dr. {doctorName(v.doctor)}</p>
                         <div className="grid grid-cols-3 gap-3 text-sm">
                           <div><p className="text-xs font-semibold text-gray-400 uppercase mb-1">Diagnosis</p><p className="text-gray-700">{v.diagnosis||'—'}</p></div>
                           <div><p className="text-xs font-semibold text-gray-400 uppercase mb-1">Prescription</p><p className="text-gray-700">{v.prescription||'—'}</p></div>
@@ -607,7 +612,10 @@ export default function ReceptionDashboard() {
                 <div className="px-5 py-4 border-b flex justify-between"><h3 className="font-bold text-sm text-gray-800">Upcoming Appointments</h3><button onClick={()=>setTab('appointments')} className="text-xs text-violet-600 font-semibold">View all →</button></div>
                 {appts.filter(a=>a.status==='SCHEDULED').slice(0,5).map(a=>(
                   <div key={a.id} className="px-5 py-3 flex items-center justify-between border-b last:border-0 hover:bg-gray-50">
-                    <div><p className="text-sm font-medium text-gray-800">{a.patient.fullName}</p><p className="text-xs text-gray-400">Dr. {a.doctor.user?.fullName} · {new Date(a.scheduledAt).toLocaleDateString('en-IN')}</p></div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{a.patient?.fullName ?? '—'}</p>
+                      <p className="text-xs text-gray-400">Dr. {doctorName(a.doctor)} · {new Date(a.scheduledAt).toLocaleDateString('en-IN')}</p>
+                    </div>
                     <Badge s={a.status}/>
                   </div>
                 ))}
@@ -653,30 +661,19 @@ export default function ReceptionDashboard() {
                       onChange={e => setPForm(f=>({...f,address:e.target.value}))} />
                   </F>
                 </div>
-
-                {/* ✅ NEW: Doctor assignment — only shown when creating, not editing */}
                 {!editP && (
                   <div className="md:col-span-2">
                     <F label="Consulting Doctor">
-                      <select
-                        className={I}
-                        value={pForm.doctorId}
-                        onChange={e => setPForm(f=>({...f, doctorId: e.target.value}))}
-                      >
+                      <select className={I} value={pForm.doctorId} onChange={e => setPForm(f=>({...f, doctorId: e.target.value}))}>
                         <option value="">— Select consulting doctor (optional) —</option>
                         {doctors.map(d => (
-                          <option key={d.id} value={d.id}>
-                            Dr. {d.user?.fullName} – {d.specialization || 'General'}
-                          </option>
+                          <option key={d.id} value={d.id}>Dr. {d.user?.fullName ?? '?'} – {d.specialization || 'General'}</option>
                         ))}
                       </select>
                     </F>
-                    <p className="text-xs text-gray-400 mt-1">
-                      💡 The selected doctor will see this patient in their dashboard
-                    </p>
+                    <p className="text-xs text-gray-400 mt-1">💡 The selected doctor will see this patient in their dashboard</p>
                   </div>
                 )}
-
                 <div className="md:col-span-2 flex justify-end">
                   <button type="submit" disabled={!!busy.pForm}
                     className="flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm">
@@ -766,7 +763,7 @@ export default function ReceptionDashboard() {
                   <select className={aErr.doctorId?IE:I} value={aForm.doctorId}
                     onChange={e=>{setAForm(f=>({...f,doctorId:Number(e.target.value)}));setAErr(x=>({...x,doctorId:''}))}} >
                     <option value={0}>Select Doctor</option>
-                    {doctors.map(d=><option key={d.id} value={d.id}>Dr. {d.user?.fullName} – {d.specialization||'General'}</option>)}
+                    {doctors.map(d=><option key={d.id} value={d.id}>Dr. {d.user?.fullName ?? '?'} – {d.specialization||'General'}</option>)}
                   </select>
                 </F>
                 <F label="Date & Time" req err={aErr.scheduledAt}>
@@ -815,12 +812,12 @@ export default function ReceptionDashboard() {
                           <tr key={a.id} className={`hover:bg-gray-50 transition-colors ${editA?.id===a.id?'bg-blue-50':''}`}>
                             <td className="px-5 py-3.5"><span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded-lg text-gray-600">#{a.id}</span></td>
                             <td className="px-4 py-3.5">
-                              <p className="font-semibold text-gray-900">{a.patient.fullName}</p>
-                              <p className="text-xs text-gray-400">Code: {a.patient.code}</p>
+                              <p className="font-semibold text-gray-900">{a.patient?.fullName ?? '—'}</p>
+                              <p className="text-xs text-gray-400">Code: {a.patient?.code ?? '—'}</p>
                             </td>
                             <td className="px-4 py-3.5">
-                              <p className="text-gray-700">Dr. {a.doctor.user?.fullName||'—'}</p>
-                              <p className="text-xs text-gray-400">{a.doctor.specialization||'—'}</p>
+                              <p className="text-gray-700">Dr. {doctorName(a.doctor)}</p>
+                              <p className="text-xs text-gray-400">{a.doctor?.specialization ?? '—'}</p>
                             </td>
                             <td className="px-4 py-3.5">
                               <p className="text-gray-700">{new Date(a.scheduledAt).toLocaleDateString('en-IN')}</p>
@@ -837,7 +834,7 @@ export default function ReceptionDashboard() {
                                   <option value="COMPLETED">Completed</option>
                                   <option value="CANCELLED">Cancelled</option>
                                 </select>
-                                <button onClick={() => ask('Delete Appointment',`Delete appointment #${a.id} for ${a.patient.fullName}?`,()=>deleteA(a))}
+                                <button onClick={() => ask('Delete Appointment',`Delete appointment #${a.id} for ${a.patient?.fullName ?? '?'}?`,()=>deleteA(a))}
                                   disabled={!!busy[`da_${a.id}`]} className={bDel}>
                                   {busy[`da_${a.id}`]?<Spin/>:'🗑️'} Delete
                                 </button>
@@ -909,17 +906,17 @@ export default function ReceptionDashboard() {
                             <td className="px-5 py-3.5 text-xs font-mono text-gray-400">#{d.id}</td>
                             <td className="px-4 py-3.5">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{d.user.fullName[0]}</div>
-                                <span className="font-semibold text-gray-900">Dr. {d.user.fullName}</span>
+                                <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{(d.user?.fullName ?? '?')[0]}</div>
+                                <span className="font-semibold text-gray-900">Dr. {d.user?.fullName ?? '—'}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3.5 text-gray-500">{d.user.email}</td>
+                            <td className="px-4 py-3.5 text-gray-500">{d.user?.email ?? '—'}</td>
                             <td className="px-4 py-3.5"><span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">{d.specialization||'—'}</span></td>
                             <td className="px-4 py-3.5 text-gray-500">{d.phone||'—'}</td>
                             <td className="px-4 py-3.5">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button onClick={() => { loadSched(d.id); setTab('schedule') }} className={bGreen}>📅 Manage Schedule</button>
-                                <button onClick={() => ask('Delete Doctor',`Remove Dr. ${d.user.fullName}?`,()=>deleteD(d))}
+                                <button onClick={() => ask('Delete Doctor',`Remove Dr. ${d.user?.fullName ?? '?'}?`,()=>deleteD(d))}
                                   disabled={!!busy[`dd_${d.id}`]} className={bDel}>
                                   {busy[`dd_${d.id}`]?<Spin/>:'🗑️'} Delete
                                 </button>
@@ -943,7 +940,7 @@ export default function ReceptionDashboard() {
               <select className={`${I} max-w-sm`} value={selDoc}
                 onChange={e=>{const id=Number(e.target.value);if(id)loadSched(id);else{setSelDoc(0);setAvails([]);setHols([])}}}>
                 <option value={0}>— Select a doctor —</option>
-                {doctors.map(d=><option key={d.id} value={d.id}>Dr. {d.user?.fullName} – {d.specialization||'General'}</option>)}
+                {doctors.map(d=><option key={d.id} value={d.id}>Dr. {d.user?.fullName ?? '?'} – {d.specialization||'General'}</option>)}
               </select>
               {busy.sched && <p className="text-sm text-gray-400 mt-2">Loading schedule…</p>}
             </div>
