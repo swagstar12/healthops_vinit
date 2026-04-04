@@ -43,8 +43,7 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
-    // Allow requests from frontend development and production
-    config.setAllowedOriginPatterns(Arrays.asList("*")); // More permissive for development
+    config.setAllowedOriginPatterns(Arrays.asList("*"));
     config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
     config.setAllowedHeaders(Arrays.asList("*"));
     config.setAllowCredentials(true);
@@ -64,9 +63,10 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
           .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
-          .requestMatchers(HttpMethod.GET, "/api/auth/test").permitAll()
-          .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()     // ← ADD THIS
-          .requestMatchers(HttpMethod.POST, "/api/public/**").permitAll()    // ← ADD THIS
+          .requestMatchers(HttpMethod.GET,  "/api/auth/test").permitAll()
+          .requestMatchers(HttpMethod.GET,  "/api/auth/forgot-password").permitAll()   // ← NEW
+          .requestMatchers(HttpMethod.GET,  "/api/public/**").permitAll()
+          .requestMatchers(HttpMethod.POST, "/api/public/**").permitAll()
           .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
           .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
           .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -108,9 +108,7 @@ public class SecurityConfig {
           var userDetails = userService.loadUserByUsername(email);
           var authToken = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
           SecurityContextHolder.getContext().setAuthentication(authToken);
-        } catch (Exception ignored) {
-          // Invalid token, continue without authentication
-        }
+        } catch (Exception ignored) {}
       }
       chain.doFilter(request, response);
     }

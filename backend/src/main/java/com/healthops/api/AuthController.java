@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,11 +30,13 @@ public class AuthController {
   }
 
   @PostMapping("/login")
-  public ResponseEntity<LoginResponse> login(@RequestBody @Valid LoginRequest req) {
+  public ResponseEntity<?> login(@RequestBody @Valid LoginRequest req) {
     try {
       authManager.authenticate(new UsernamePasswordAuthenticationToken(req.email(), req.password()));
+    } catch (DisabledException e) {
+      return ResponseEntity.status(403).body(Map.of("message", "Your account has been disabled. Please contact your administrator."));
     } catch (BadCredentialsException e) {
-      return ResponseEntity.status(401).build();
+      return ResponseEntity.status(401).body(Map.of("message", "Invalid email or password."));
     }
     User u = userRepo.findByEmail(req.email()).orElseThrow();
     String role = u.getRoles().stream().findFirst().map(r -> r.getName()).orElse("UNKNOWN");
@@ -46,6 +49,22 @@ public class AuthController {
     Role role = Role.valueOf(req.role().toUpperCase());
     var u = userService.register(req.email(), req.fullName(), req.password(), role);
     return ResponseEntity.ok(Map.of("id", u.getId()));
+  }
+
+  /**
+   * Forgot password — returns the stored password for the given email.
+   * NOTE: This works because passwords are stored as plain text (NoOpPasswordEncoder).
+   * In a production system you would send a reset link via email instead.
+   */
+  @GetMapping("/forgot-password")
+  public ResponseEntity<?> forgotPassword(@RequestParam("email") String email) {
+    return userRepo.findByEmail(email.trim().toLowerCase())
+        .map(u -> ResponseEntity.ok(Map.of(
+            "email", u.getEmail(),
+            "fullName", u.getFullName(),
+            "password", u.getPassword()
+        )))
+        .orElse(ResponseEntity.status(404).build());
   }
 
   @GetMapping("/test")

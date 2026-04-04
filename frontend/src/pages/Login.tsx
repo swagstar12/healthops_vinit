@@ -35,11 +35,8 @@ type BookingResult = {
   razorpayOrderId: string;
 };
 
-// Declare Razorpay on window
 declare global {
-  interface Window {
-    Razorpay: any;
-  }
+  interface Window { Razorpay: any; }
 }
 
 const DAYS = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -68,7 +65,6 @@ function isDoctorAvailable(doctor: DoctorPublic, dateStr: string): { ok: boolean
   return { ok: true };
 }
 
-// ─── Load Razorpay script ─────────────────────────────────────────────────────
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise(resolve => {
     if (window.Razorpay) { resolve(true); return; }
@@ -80,9 +76,7 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-// ─── PDF Receipt Generator (client-side using jsPDF via CDN) ─────────────────
 function generateReceiptPDF(result: BookingResult): void {
-  // We use the jsPDF library loaded globally; we load it dynamically
   const loadJsPDF = (): Promise<any> => {
     return new Promise(resolve => {
       if ((window as any).jspdf) { resolve((window as any).jspdf.jsPDF); return; }
@@ -98,36 +92,27 @@ function generateReceiptPDF(result: BookingResult): void {
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
 
-    // ── Background gradient-like header ──
-    doc.setFillColor(37, 99, 235); // blue-600
+    doc.setFillColor(37, 99, 235);
     doc.rect(0, 0, pageW, 50, "F");
-
-    // ── Decorative accent strip ──
-    doc.setFillColor(99, 102, 241); // indigo
+    doc.setFillColor(99, 102, 241);
     doc.rect(0, 45, pageW, 8, "F");
 
-    // ── Hospital name ──
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
     doc.setTextColor(255, 255, 255);
     doc.text("🏥 Meera Multispecialty Hospital", pageW / 2, 18, { align: "center" });
-
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
     doc.text("123 Medical Center Drive, Pune, Maharashtra 411001", pageW / 2, 27, { align: "center" });
     doc.text("Tel: +91-20-2567-8900 | support@meerahospital.com", pageW / 2, 34, { align: "center" });
-
-    // ── Receipt title ──
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(255, 255, 255);
     doc.text("APPOINTMENT RECEIPT", pageW / 2, 43, { align: "center" });
 
-    // ── Main content area ──
     let y = 62;
 
-    // Receipt box
-    doc.setFillColor(248, 250, 252); // gray-50
+    doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.5);
     doc.roundedRect(14, y - 4, pageW - 28, 12, 2, 2, "FD");
@@ -144,21 +129,20 @@ function generateReceiptPDF(result: BookingResult): void {
 
     y += 18;
 
-    // ── Section: Patient Information ──
     const drawSection = (title: string, yPos: number): number => {
-      doc.setFillColor(239, 246, 255); // blue-50
-      doc.setDrawColor(191, 219, 254); // blue-200
+      doc.setFillColor(239, 246, 255);
+      doc.setDrawColor(191, 219, 254);
       doc.roundedRect(14, yPos, pageW - 28, 8, 1, 1, "FD");
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(29, 78, 216); // blue-700
+      doc.setTextColor(29, 78, 216);
       doc.text(title, 20, yPos + 5.5);
       return yPos + 14;
     };
 
     const drawRow = (label: string, value: string, yPos: number, highlight = false): number => {
       if (highlight) {
-        doc.setFillColor(240, 253, 244); // green-50
+        doc.setFillColor(240, 253, 244);
         doc.rect(14, yPos - 2, pageW - 28, 9, "F");
       }
       doc.setFontSize(9.5);
@@ -168,7 +152,6 @@ function generateReceiptPDF(result: BookingResult): void {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(15, 23, 42);
       doc.text(value, pageW / 2, yPos + 4);
-      // Divider
       doc.setDrawColor(241, 245, 249);
       doc.setLineWidth(0.2);
       doc.line(14, yPos + 7.5, pageW - 14, yPos + 7.5);
@@ -196,15 +179,10 @@ function generateReceiptPDF(result: BookingResult): void {
     y = drawSection("💳  PAYMENT INFORMATION", y);
     y = drawRow("Consultation Fee", `₹ ${Number(result.consultationFee).toFixed(2)}`, y);
     y = drawRow("Payment Status", "PAID", y, true);
-    if (result.razorpayPaymentId) {
-      y = drawRow("Payment ID", result.razorpayPaymentId, y);
-    }
-    if (result.razorpayOrderId) {
-      y = drawRow("Order ID", result.razorpayOrderId, y);
-    }
+    if (result.razorpayPaymentId) y = drawRow("Payment ID", result.razorpayPaymentId, y);
+    if (result.razorpayOrderId)   y = drawRow("Order ID", result.razorpayOrderId, y);
     y = drawRow("Payment Method", "Razorpay (UPI / Card / Net Banking)", y);
 
-    // ── Total box ──
     y += 6;
     doc.setFillColor(37, 99, 235);
     doc.roundedRect(14, y, pageW - 28, 16, 3, 3, "F");
@@ -214,26 +192,23 @@ function generateReceiptPDF(result: BookingResult): void {
     doc.text("TOTAL PAID", 25, y + 10);
     doc.text(`₹ ${Number(result.consultationFee).toFixed(2)}`, pageW - 20, y + 10, { align: "right" });
 
-    // ── Important note box ──
     y += 24;
-    doc.setFillColor(255, 251, 235); // amber-50
-    doc.setDrawColor(252, 211, 77);  // amber-300
+    doc.setFillColor(255, 251, 235);
+    doc.setDrawColor(252, 211, 77);
     doc.setLineWidth(0.5);
     doc.roundedRect(14, y, pageW - 28, 22, 2, 2, "FD");
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(146, 64, 14); // amber-800
+    doc.setTextColor(146, 64, 14);
     doc.text("⚠  IMPORTANT INFORMATION", 20, y + 6);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(120, 53, 15);
     doc.text("• Please arrive 15 minutes before your scheduled appointment time.", 20, y + 12);
     doc.text("• Carry this receipt and a valid photo ID for verification.", 20, y + 17);
 
-    // ── Footer ──
     const footerY = pageH - 20;
     doc.setFillColor(37, 99, 235);
     doc.rect(0, footerY - 4, pageW, 1, "F");
-
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 116, 139);
@@ -243,6 +218,167 @@ function generateReceiptPDF(result: BookingResult): void {
 
     doc.save(`HealthOps-Receipt-Appt${result.appointmentId}.pdf`);
   });
+}
+
+// ─── Forgot Password Modal ────────────────────────────────────────────────────
+function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ fullName: string; password: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) { setError("Please enter your email address."); return; }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/auth/forgot-password?email=${encodeURIComponent(email.trim())}`);
+      if (res.status === 404) {
+        setError("No account found with that email address.");
+        setLoading(false);
+        return;
+      }
+      if (!res.ok) throw new Error("Server error");
+      const data = await res.json();
+      setResult({ fullName: data.fullName, password: data.password });
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function copyPassword() {
+    if (result) {
+      navigator.clipboard.writeText(result.password).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[400] p-4">
+      <div
+        className="bg-white rounded-3xl shadow-2xl max-w-md w-full border border-gray-100 overflow-hidden"
+        style={{ animation: "slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)" }}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 text-white relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-lg transition-colors"
+          >
+            ×
+          </button>
+          <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mb-3">
+            🔑
+          </div>
+          <h3 className="text-xl font-black">Forgot Password?</h3>
+          <p className="text-blue-100 text-sm mt-1">
+            Enter your email to retrieve your password
+          </p>
+        </div>
+
+        <div className="p-6">
+          {!result ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all bg-gray-50"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setError(null); }}
+                  autoFocus
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                  <span>⚠</span> {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 disabled:opacity-60 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all"
+              >
+                {loading ? (
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Looking up account…</>
+                ) : (
+                  "🔍 Find My Password"
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2.5 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              {/* Success */}
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl flex-shrink-0">✅</div>
+                <div>
+                  <p className="font-bold text-emerald-800 text-sm">Account found!</p>
+                  <p className="text-emerald-600 text-xs">Welcome back, {result.fullName}</p>
+                </div>
+              </div>
+
+              {/* Password reveal */}
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Your Password</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-mono text-sm text-gray-800 min-h-[42px] flex items-center">
+                    {showPass ? result.password : "•".repeat(Math.min(result.password.length, 12))}
+                  </div>
+                  <button
+                    onClick={() => setShowPass(v => !v)}
+                    className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors flex-shrink-0"
+                    title={showPass ? "Hide" : "Show"}
+                  >
+                    {showPass ? "🙈" : "👁️"}
+                  </button>
+                  <button
+                    onClick={copyPassword}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
+                      ${copied ? "bg-emerald-100 text-emerald-700" : "bg-blue-50 hover:bg-blue-100 text-blue-700"}`}
+                    title="Copy to clipboard"
+                  >
+                    {copied ? "✓" : "📋"}
+                  </button>
+                </div>
+                {copied && <p className="text-xs text-emerald-600 font-medium mt-1.5">✓ Copied to clipboard!</p>}
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+                💡 <strong>Tip:</strong> Copy your password above, then close this dialog to sign in.
+              </div>
+
+              <button
+                onClick={onClose}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold rounded-xl text-sm transition-all"
+              >
+                ← Back to Sign In
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Doctor Card ──────────────────────────────────────────────────────────────
@@ -368,7 +504,6 @@ function PaymentConfirmModal({ doctor, form, onPay, onCancel, loading }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[300] p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-gray-100" style={{ animation: "slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)" }}>
-        {/* Header */}
         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-t-3xl p-6 text-white text-center">
           <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">💳</div>
           <h3 className="text-xl font-black">Confirm & Pay</h3>
@@ -376,7 +511,6 @@ function PaymentConfirmModal({ doctor, form, onPay, onCancel, loading }: {
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Appointment summary */}
           <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl flex-shrink-0">{getSpecIcon(doctor.specialization)}</div>
@@ -405,7 +539,6 @@ function PaymentConfirmModal({ doctor, form, onPay, onCancel, loading }: {
             )}
           </div>
 
-          {/* Payment amount */}
           <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-gray-600">Consultation Fee</p>
@@ -417,14 +550,12 @@ function PaymentConfirmModal({ doctor, form, onPay, onCancel, loading }: {
             </div>
           </div>
 
-          {/* Razorpay badge */}
           <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
             <span>🔒 Secured by</span>
             <span className="font-bold text-blue-700 text-sm">Razorpay</span>
             <span>· UPI, Cards, Net Banking</span>
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-1">
             <button onClick={onCancel} disabled={loading}
               className="flex-1 py-3 border border-gray-200 rounded-2xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
@@ -456,7 +587,6 @@ function BookingSuccess({ result, onClose }: { result: BookingResult; onClose: (
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[300] p-4">
       <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full border border-gray-100 overflow-hidden" style={{ animation: "slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1)" }}>
-        {/* Success Header */}
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-center relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 left-0 w-32 h-32 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
@@ -469,7 +599,6 @@ function BookingSuccess({ result, onClose }: { result: BookingResult; onClose: (
           </div>
         </div>
 
-        {/* Details */}
         <div className="p-6 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-blue-50 rounded-2xl p-3 text-center">
@@ -507,7 +636,6 @@ function BookingSuccess({ result, onClose }: { result: BookingResult; onClose: (
             📝 <strong>Note your Patient Code: {result.patientCode}</strong> — you'll need it for future visits.
           </div>
 
-          {/* Action buttons */}
           <button onClick={handleDownload} disabled={downloading}
             className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg text-sm">
             {downloading
@@ -515,8 +643,7 @@ function BookingSuccess({ result, onClose }: { result: BookingResult; onClose: (
               : <>📄 Download Receipt (PDF)</>}
           </button>
 
-          <button onClick={onClose}
-            className="w-full py-3 border border-gray-200 text-gray-600 rounded-2xl font-semibold text-sm hover:bg-gray-50 transition-colors">
+          <button onClick={onClose} className="w-full py-3 border border-gray-200 text-gray-600 rounded-2xl font-semibold text-sm hover:bg-gray-50 transition-colors">
             Done
           </button>
         </div>
@@ -527,21 +654,21 @@ function BookingSuccess({ result, onClose }: { result: BookingResult; onClose: (
 
 // ─── Main Login Page ──────────────────────────────────────────────────────────
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [err, setErr]           = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
-  const [doctors, setDoctors] = useState<DoctorPublic[]>([]);
+  const [doctors, setDoctors]             = useState<DoctorPublic[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(false);
   const [showDoctorPicker, setShowDoctorPicker] = useState(false);
 
-  // Payment flow states
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-  const [bookingSuccess, setBookingSuccess] = useState<BookingResult | null>(null);
-  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [paymentLoading, setPaymentLoading]         = useState(false);
+  const [bookingSuccess, setBookingSuccess]         = useState<BookingResult | null>(null);
+  const [bookingError, setBookingError]             = useState<string | null>(null);
 
   const [form, setForm] = useState<BookingForm>({
     patientName: "", patientPhone: "", doctorId: null, scheduledAt: "", reason: "",
@@ -567,13 +694,19 @@ export default function Login() {
     e.preventDefault();
     setErr(null);
     setLoading(true);
-    if (!email || !password) { setErr("Please fill in all fields"); setLoading(false); return; }
+    if (!email || !password) { setErr("Please fill in all fields."); setLoading(false); return; }
     try {
       const { data } = await api.post("/auth/login", { email, password });
       login({ fullName: data.fullName, role: data.role, token: data.token });
       nav("/");
     } catch (e: any) {
-      setErr(e.response?.status === 401 ? "Invalid email or password" : "Login failed. Please try again.");
+      if (e.response?.status === 403) {
+        setErr(e.response?.data?.message || "Your account has been disabled. Please contact your administrator.");
+      } else if (e.response?.status === 401) {
+        setErr(e.response?.data?.message || "Invalid email or password.");
+      } else {
+        setErr("Login failed. Please try again.");
+      }
     } finally { setLoading(false); }
   }
 
@@ -590,7 +723,6 @@ export default function Login() {
     return Object.keys(errs).length === 0;
   }
 
-  // ─── Step 1: Validate form → show payment confirm ─────────────────────────
   function handleBookNow(e: React.FormEvent) {
     e.preventDefault();
     setBookingError(null);
@@ -598,14 +730,12 @@ export default function Login() {
     setShowPaymentConfirm(true);
   }
 
-  // ─── Step 2: Trigger Razorpay payment ────────────────────────────────────
   async function handlePay() {
     if (!selectedDoctor) return;
     setPaymentLoading(true);
     setBookingError(null);
 
     try {
-      // Load Razorpay script
       const loaded = await loadRazorpayScript();
       if (!loaded) {
         setBookingError("Failed to load payment gateway. Please check your internet connection.");
@@ -613,7 +743,6 @@ export default function Login() {
         return;
       }
 
-      // Create Razorpay order on backend
       const orderRes = await fetch("/api/public/create-payment-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -633,7 +762,6 @@ export default function Login() {
       setPaymentLoading(false);
       setShowPaymentConfirm(false);
 
-      // Open Razorpay checkout
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
@@ -642,17 +770,10 @@ export default function Login() {
         description: `Consultation with Dr. ${selectedDoctor.name}`,
         image: "https://i.imgur.com/n5tjHFD.png",
         order_id: orderData.orderId,
-        prefill: {
-          name: form.patientName,
-          contact: form.patientPhone,
-        },
-        notes: {
-          doctorName: `Dr. ${selectedDoctor.name}`,
-          specialization: selectedDoctor.specialization,
-        },
+        prefill: { name: form.patientName, contact: form.patientPhone },
+        notes: { doctorName: `Dr. ${selectedDoctor.name}`, specialization: selectedDoctor.specialization },
         theme: { color: "#2563EB" },
         handler: async function (response: any) {
-          // Payment success → book appointment
           await confirmBooking(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature);
         },
         modal: {
@@ -671,7 +792,6 @@ export default function Login() {
     }
   }
 
-  // ─── Step 3: Confirm booking after payment ────────────────────────────────
   async function confirmBooking(paymentId: string, orderId: string, signature: string) {
     try {
       const res = await fetch("/api/public/book-appointment", {
@@ -698,7 +818,7 @@ export default function Login() {
 
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 
-  const inp = `w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white`;
+  const inp    = `w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white`;
   const inpErr = `w-full px-4 py-3 border border-red-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 transition-all bg-red-50`;
 
   const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", email: "", phone: "", department: "", message: "" });
@@ -717,7 +837,9 @@ export default function Login() {
         }
       `}</style>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
+      {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
+
       {showDoctorPicker && (
         <DoctorPickerModal doctors={doctors} selectedId={form.doctorId} scheduledAt={form.scheduledAt}
           onSelect={id => setForm(f => ({ ...f, doctorId: id }))} onClose={() => setShowDoctorPicker(false)} />
@@ -753,32 +875,90 @@ export default function Login() {
             <button onClick={() => scrollTo("book-appointment")} className="px-8 py-3.5 bg-white text-blue-700 font-bold rounded-2xl shadow-xl hover:scale-105 transition-transform text-base">📅 Book an Appointment</button>
           </div>
         </div>
+
         <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-gradient-to-br from-blue-50 to-indigo-100">
           <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg border border-gray-100">
-            <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">Doctors & Staff Login</h2>
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-800">Doctors & Staff Login</h2>
+              <p className="text-gray-400 text-sm mt-1">Sign in to access your dashboard</p>
+            </div>
+
             <form className="space-y-5" onSubmit={submit}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                <input type="email" className={`${inp} border-gray-300`} placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} disabled={loading} />
+                <input
+                  type="email"
+                  className={`${inp} border-gray-300`}
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setErr(null); }}
+                  disabled={loading}
+                />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                <input type="password" className={`${inp} border-gray-300`} placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} disabled={loading} />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className={`${inp} border-gray-300 pr-11`}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setErr(null); }}
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors text-lg"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
               </div>
+
               <div className="flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="h-4 w-4 text-blue-600 rounded border-gray-300" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
-                  <span className="text-gray-600">Remember me</span>
-                </label>
-                <button type="button" className="text-blue-600 hover:text-blue-800 font-medium">Forgot password?</button>
+                <span className="text-gray-400 text-xs">
+                  New account? Ask your administrator to add you.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(true)}
+                  className="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+                >
+                  Forgot password?
+                </button>
               </div>
-              {err && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2"><span>⚠</span>{err}</div>}
-              <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors">
+
+              {err && (
+                <div className={`px-4 py-3 rounded-xl text-sm flex items-start gap-2 border
+                  ${err.includes("disabled")
+                    ? "bg-amber-50 border-amber-200 text-amber-800"
+                    : "bg-red-50 border-red-200 text-red-700"}`}>
+                  <span className="flex-shrink-0 mt-0.5">{err.includes("disabled") ? "⚠️" : "⚠"}</span>
+                  <span>{err}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
                 {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {loading ? "Signing in…" : "Sign In"}
+                {loading ? "Signing in…" : "Sign In →"}
               </button>
             </form>
-            <div className="mt-5 text-center text-sm text-gray-500">Need help? <span className="font-semibold text-blue-600">support@meerahospital.com</span></div>
+
+            <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Demo Credentials</p>
+              <div className="space-y-1 text-xs text-gray-500">
+                <p>🔵 <strong>Admin:</strong> admin@healthops.com / Admin@123</p>
+                <p>🟢 <strong>Doctor:</strong> doc1@healthops.com / Doctor@123</p>
+                <p>🟣 <strong>Reception:</strong> reception@healthops.com / Reception@123</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -801,7 +981,6 @@ export default function Login() {
           </div>
 
           <div className="max-w-2xl mx-auto">
-            {/* Payment flow indicator */}
             <div className="flex items-center justify-center gap-3 mb-8">
               {[
                 { n: "1", l: "Fill Details" },
@@ -856,7 +1035,6 @@ export default function Login() {
                   )}
                 </div>
 
-                {/* Doctor selector */}
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Select Doctor <span className="text-red-500">*</span></label>
                   {selectedDoctor ? (
@@ -908,7 +1086,6 @@ export default function Login() {
                   </div>
                 )}
 
-                {/* Fee summary before submit */}
                 {selectedDoctor && (
                   <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
                     <div>
@@ -936,9 +1113,9 @@ export default function Login() {
 
             <div className="grid grid-cols-3 gap-4 mt-6">
               {[
-                { icon: "🔒", title: "Secure Payment", desc: "Razorpay encrypted checkout" },
-                { icon: "📄", title: "PDF Receipt", desc: "Download instantly after booking" },
-                { icon: "✅", title: "Instant Confirmation", desc: "Get your appointment ID right away" },
+                { icon: "🔒", title: "Secure Payment",        desc: "Razorpay encrypted checkout" },
+                { icon: "📄", title: "PDF Receipt",           desc: "Download instantly after booking" },
+                { icon: "✅", title: "Instant Confirmation",  desc: "Get your appointment ID right away" },
               ].map(c => (
                 <div key={c.title} className="bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl p-4 text-center text-white">
                   <div className="text-2xl mb-2">{c.icon}</div>
@@ -959,8 +1136,8 @@ export default function Login() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
               { icon: "🏥", title: "2+ Years of Excellence", desc: "Serving the community with dedication and advanced medical care since 2023." },
-              { icon: "👨‍⚕️", title: "Expert Medical Team", desc: "Board-certified specialists and experienced healthcare professionals." },
-              { icon: "⚡", title: "24/7 Emergency Care", desc: "Round-the-clock emergency services with state-of-the-art equipment." },
+              { icon: "👨‍⚕️", title: "Expert Medical Team",  desc: "Board-certified specialists and experienced healthcare professionals." },
+              { icon: "⚡", title: "24/7 Emergency Care",   desc: "Round-the-clock emergency services with state-of-the-art equipment." },
             ].map(c => (
               <div key={c.title} className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all border border-gray-100 text-center">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 text-xl mb-4 mx-auto">{c.icon}</div>
@@ -979,12 +1156,12 @@ export default function Login() {
           <p className="text-lg text-gray-600 text-center mb-12 max-w-3xl mx-auto">Comprehensive healthcare across multiple specialties.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: "❤️", title: "Cardiology", description: "Advanced cardiac care including interventional cardiology.", services: ["Cardiac Catheterization", "Angioplasty", "Heart Surgery", "ECG Services"] },
-              { icon: "🧠", title: "Neurology", description: "Comprehensive neurological care for brain and spine.", services: ["Brain Surgery", "Stroke Treatment", "Epilepsy", "Rehabilitation"] },
-              { icon: "🦴", title: "Orthopedics", description: "Expert treatment for bone and joint conditions.", services: ["Joint Replacement", "Arthroscopy", "Trauma Care", "Sports Medicine"] },
-              { icon: "👶", title: "Pediatrics", description: "Specialized healthcare for children.", services: ["Newborn Care", "Pediatric Surgery", "Vaccination", "Child Development"] },
-              { icon: "👩‍⚕️", title: "Gynecology", description: "Complete women's healthcare.", services: ["Maternity Care", "Fertility", "Minimally Invasive Surgery", "Screenings"] },
-              { icon: "🔬", title: "Diagnostics", description: "State-of-the-art diagnostic services.", services: ["MRI & CT Scans", "Laboratory", "Digital X-Ray", "Pathology"] },
+              { icon: "❤️", title: "Cardiology",    description: "Advanced cardiac care.", services: ["Cardiac Catheterization", "Angioplasty", "Heart Surgery", "ECG"] },
+              { icon: "🧠", title: "Neurology",     description: "Brain and spine care.",  services: ["Brain Surgery", "Stroke Treatment", "Epilepsy", "Rehabilitation"] },
+              { icon: "🦴", title: "Orthopedics",   description: "Bone and joint care.",   services: ["Joint Replacement", "Arthroscopy", "Trauma Care", "Sports Medicine"] },
+              { icon: "👶", title: "Pediatrics",    description: "Children's healthcare.", services: ["Newborn Care", "Pediatric Surgery", "Vaccination", "Development"] },
+              { icon: "👩‍⚕️", title: "Gynecology",  description: "Women's healthcare.",   services: ["Maternity Care", "Fertility", "Surgery", "Screenings"] },
+              { icon: "🔬", title: "Diagnostics",   description: "Advanced diagnostics.",  services: ["MRI & CT Scans", "Laboratory", "Digital X-Ray", "Pathology"] },
             ].map((s, i) => (
               <div key={i} className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all border border-gray-100">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 text-xl mb-4">{s.icon}</div>
@@ -1004,9 +1181,9 @@ export default function Login() {
           <p className="text-lg text-gray-300 text-center mb-12 max-w-3xl mx-auto">Get in touch for appointments, inquiries, or emergency services.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {[
-              { icon: "📍", color: "bg-blue-600", title: "Hospital Address", content: "123 Medical Center Drive\nHealthcare District\nPune, Maharashtra 411001\nIndia" },
-              { icon: "📞", color: "bg-green-600", title: "Phone Numbers", content: "Main: +91-20-2567-8900\nEmergency: +91-20-2567-8911\nAppointments: +91-20-2567-8922\nToll Free: 1800-123-4567" },
-              { icon: "📧", color: "bg-purple-600", title: "Email & Web", content: "General: info@meerahospital.com\nAppointments: appointments@meerahospital.com\nEmergency: emergency@meerahospital.com" },
+              { icon: "📍", color: "bg-blue-600",   title: "Hospital Address", content: "123 Medical Center Drive\nHealthcare District\nPune, Maharashtra 411001" },
+              { icon: "📞", color: "bg-green-600",  title: "Phone Numbers",    content: "Main: +91-20-2567-8900\nEmergency: +91-20-2567-8911\nAppointments: +91-20-2567-8922" },
+              { icon: "📧", color: "bg-purple-600", title: "Email",            content: "General: info@meerahospital.com\nAppointments: appointments@meerahospital.com" },
             ].map(c => (
               <div key={c.title} className="bg-gray-700 p-8 rounded-xl">
                 <div className={`w-12 h-12 ${c.color} rounded-lg flex items-center justify-center text-white text-xl mb-4`}>{c.icon}</div>
@@ -1048,7 +1225,6 @@ export default function Login() {
               </div>
               <div className="bg-gray-700 p-8 rounded-xl">
                 <h3 className="text-2xl font-bold mb-4">Emergency</h3>
-                <p className="text-sm mb-2">24/7 Emergency Services</p>
                 <p className="text-2xl font-bold text-red-400">+91-20-2567-8911</p>
                 <p className="text-sm mt-2">Ambulance: <span className="font-bold">108</span></p>
               </div>
@@ -1061,7 +1237,7 @@ export default function Login() {
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="container mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-8">
-            <div><h4 className="text-white font-bold text-lg mb-4">Meera Multispecialty Hospital</h4><p className="text-sm">Your trusted healthcare partner providing comprehensive medical services.</p></div>
+            <div><h4 className="text-white font-bold text-lg mb-4">Meera Multispecialty Hospital</h4><p className="text-sm">Your trusted healthcare partner.</p></div>
             <div>
               <h5 className="text-white font-semibold mb-4">Quick Links</h5>
               <ul className="space-y-2 text-sm">
@@ -1082,7 +1258,6 @@ export default function Login() {
             </div>
             <div>
               <h5 className="text-white font-semibold mb-4">Emergency</h5>
-              <p className="text-sm mb-2">24/7 Emergency Services</p>
               <p className="text-lg font-bold text-red-400">+91-20-2567-8911</p>
               <p className="text-sm mt-2">Ambulance: 108</p>
             </div>
